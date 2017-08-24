@@ -1,0 +1,4 @@
+requests
+## older requirements may not apply to new downloader.
+# appdirs==1.4.0
+# requests==2.11.1

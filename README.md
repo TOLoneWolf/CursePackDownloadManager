@@ -1,15 +1,13 @@
 # Curseforge Minecraft Modpack Downloader
 
 
-A simple script to download mods from a CurseForge Minecraft modpack.
+A "simple" script to download mods from a CurseForge Minecraft modpack.
 
 ## Source Script Requirements
 
 - Python 3.4+
-- appdirs
 - requests
-- python-tk
-- progressbar2
+- tkinter
 
 ## Setup For Source Script
 
@@ -21,25 +19,18 @@ A simple script to download mods from a CurseForge Minecraft modpack.
  - #### How to use source
 
     - Find the modpack you want from the [CurseForge modpack list](http://www.curse.com/modpacks/minecraft)
-    - Unzip the download. There should be a manifest.json file.
-    - Run `<python> </path/to/downloader.py> --manifest </path/to/manifest.json file>`
+    TODO Add instructions
   
  - #### Compiled Executable
 
     - Find the modpack you want from the [CurseForge modpack list](http://www.curse.com/modpacks/minecraft)
-    - Unzip the download. There should be a manifest.json file.
-    - Run `</path/to/downloader> --manifest </path/to/manifest.json file>`
+    TODO Add instructions
 
 ### Windows
  - #### Compiled Executable
    #### Accepted Arguments
 
- 	- `CMD> C:\someFolder\cursePackDownloader.exe --portable --nogui --manifest ["/path/to/manifest.json"]`
-
- 	- portable - makes the downloader cache downloads in a sub folder of current directory it is inside.
- 	 	
- 	 	ex: `CMD> C:\someFolder\cursePackDownloader.exe --portable`
- 	 	ex folder: C:\someFolder\curseCache
+ 	- `CMD> C:\someFolder\cursePackDownloader.exe --nogui --manifest ["/path/to/manifest.json"]`
 
  	- manifest - provides commandline option to select manifest.json file.
  	
@@ -61,12 +52,6 @@ A simple script to download mods from a CurseForge Minecraft modpack.
   #### Accepted Arguments
 
    - CMD> `"path/to/python" "/path/to/downloader.py" --portable --nogui --manifest ["/path/to/manifest.json"]`
-
-   - portable - makes the downloader cache downloads in a sub folder of current directory it is inside.
-       
-       ex: `CMD> C:\Python34\python.exe ["/path/to/downloader.py"] --portable`
-       
-       ex folder: C:\someFolder\curseCache
 
    - manifest - provides commandline option to select manifest.json file.
        
