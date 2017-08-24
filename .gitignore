@@ -92,3 +92,4 @@ ENV/
 .ropeproject
 
 .idea/
+curse_download_cache

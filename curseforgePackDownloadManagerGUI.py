@@ -29,8 +29,7 @@ def center(toplevel):
     size = tuple(int(_) for _ in toplevel.geometry().split('-')[0].split('+')[0].split('x'))
     x = w / 2 - size[0] / 2
     y = h / 2 - size[1] / 2
-    size = (size[0], size[1], x, y)
-    toplevel.geometry("%dx%d+%d+%d" % size)
+    toplevel.geometry("%dx%d+%d+%d" % (size[0], size[1], x, y))
 
 
 # ----------------------------------------------------------------
@@ -55,6 +54,8 @@ class NewFromCurseUrl(Toplevel):
         self.lbl_entry_url = ttk.Label(self, text="Enter MOD_PACK_NAME Here: \n"
                                                   "Example: https://minecraft.curseforge.com/projects/MOD_PACK_NAME")
         self.entry_mod_pack_name = ttk.Entry(self)
+        # FIXME Remove this debug line below.
+        self.entry_mod_pack_name.insert(END, "244939")
         self.button_submit = ttk.Button(self, text="Enter", command=self.fetch_pack_from_url)
         self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
@@ -114,7 +115,7 @@ class NewFromCurseUrl(Toplevel):
         #         percent = round((manager.currentProgress/manager.fileSize) * 100, 0)
         #         print(str(percent) + " P: " + str(manager.currentProgress) + "/" + str(manager.fileSize))
         # print("Done")
-            VersionSelectionMenu()
+            VersionSelectionMenu(pack_version_response)
             self.close_window()
 
 
@@ -144,10 +145,10 @@ class OpenPackZip:
 
 
 class VersionSelectionMenu(Toplevel):
-    def __init__(self):
+    def __init__(self, pack_version_lists=None):
         Toplevel.__init__(self)
-        self.minsize(width=400, height=75)
-        self.maxsize(width=400, height=75)
+        self.minsize(width=400, height=300)
+        self.maxsize(width=400, height=300)
         self.resizable(FALSE, FALSE)
         self.protocol("WM_DELETE_WINDOW", self.close_window)
         self.title("Select Mod Pack Version")
@@ -156,20 +157,60 @@ class VersionSelectionMenu(Toplevel):
         self.grab_set()
         for column_index in range(2):
             self.columnconfigure(column_index, weight=1)
-        for row_index in range(3):
+        for row_index in range(4):
             self.rowconfigure(row_index, weight=1)
 
-        self.lbl_entry_url = ttk.Label(self, text="Enter MOD_PACK_NAME Here: \n"
-                                                  "Example: https://minecraft.curseforge.com/projects/MOD_PACK_NAME")
-        self.entry_mod_pack_name = ttk.Entry(self)
-        self.button_submit = ttk.Button(self, text="Enter")
+        self.listbox_version_list = []
+        self.current_selection = -1
+        self.pack_version_lists = pack_version_lists
+        if pack_version_lists is not None:
+            for versions in pack_version_lists[2]:
+                type = versions[0]
+                if versions[0] == "R":
+                    type = "Release"
+                elif versions[0] == "B":
+                    type = "Beta"
+                elif versions[0] == "A":
+                    type = "Alpha"
+                self.listbox_version_list.append(type + " - " + versions[2] + " (ID: " + versions[1] + ")")
+        print(self.listbox_version_list)
+        self.lbl_select_version = ttk.Label(self, text="Select the desired version of the pack to install.")
+        self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (pack_version_lists[0], pack_version_lists[1]))
+        self.listbox_version = Listbox(self, height=12)
+        self.listbox_version.bind('<<ListboxSelect>>', self.update_selected)
+        self.button_submit = ttk.Button(self, text="Enter", command=self.download_selected_pack_version)
         self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
-        self.lbl_entry_url.grid(column=0, row=0, sticky='N', columnspan=2)
-        self.entry_mod_pack_name.grid(column=0, row=1, sticky='EW', columnspan=2)
-        self.entry_mod_pack_name.focus()
-        self.button_submit.grid(column=0, row=2, sticky='NESW')
-        self.button_cancel.grid(column=1, row=2, sticky='NESW')
+        self.lbl_select_version.grid(column=0, row=0, sticky='N', columnspan=2)
+        self.lbl_project_id.grid(column=0, row=1, sticky='N', columnspan=2)
+        self.listbox_version.grid(column=0, row=2, sticky='EW', columnspan=2)
+        self.listbox_version.focus()
+        self.button_submit.grid(column=0, row=3, sticky='NESW')
+        self.button_cancel.grid(column=1, row=3, sticky='NESW')
+        for version in self.listbox_version_list:
+            self.listbox_version.insert(END, version)
+        project_id = pack_version_lists[0]
+        project_name = pack_version_lists[1]
+        bare_pack_version_list = pack_version_lists[2]
+
+    def update_selected(self, *args):
+        self.current_selection = self.listbox_version.curselection()[0]
+        # print(self.listbox_version_list[self.current_selection])
+        # print(self.pack_version_lists[2][self.current_selection][1])
+        # pass
+
+    def download_selected_pack_version(self):
+        print("download_selected_pack_version")
+        # self.current_selection = self.listbox_version.curselection()[0]
+        print(self.listbox_version_list[self.current_selection])
+        # TODO: Check cashe for existing copy.
+        # TODO: If copy doesn't exist then download selected version.
+        # TODO: Ask for install directory, folder name.
+        #   TODO: Check if already exists.
+        #   TODO: Ask if you want to replace existing or cancel.
+        # TODO: Unpack to selected directory.
+        # TODO: Create pack setting/info file (update url, project id, curFileID aka version, etc)
+        pass
 
     def close_window(self):
         self.grab_release()
@@ -289,4 +330,5 @@ class RootWindow(Tk):
 if __name__ == '__main__':
     # needs to be inside a Tk() master window to display the askstring.
     # ask = simpledialog.askstring("test", "yo")
+    initialize_program_environment()
     RootWindow()

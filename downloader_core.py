@@ -2,6 +2,8 @@ import shutil
 import zipfile
 from pathlib import Path
 from urllib.parse import unquote
+
+import errno
 import requests
 import os
 
@@ -184,3 +186,24 @@ class CurseDownloader:
         except Exception as e:
             self.isDone = True
             raise e
+
+
+def make_sure_path_exists(path):
+    if not os.path.exists(path):
+        try:
+            os.makedirs(path)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
+
+
+def initialize_program_environment():
+    print("Curse PDM: Checking/Initializing program environment\n")
+    cache_path = "curse_download_cache"
+    modpack_zip_cache = "modpacks_cache"
+    mod_cache = "mods_cache"
+    make_sure_path_exists(cache_path + "/" + modpack_zip_cache)
+    make_sure_path_exists(cache_path + "/" + mod_cache)
+    # TODO: Program settings file. create if non-existing.
+    # TODO: Add other steps that should be check at startup time.
+    pass
