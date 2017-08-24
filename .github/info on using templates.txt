@@ -1,0 +1,5 @@
+https://github.com/blog/2111-issue-and-pull-request-templates
+
+some existing examples:
+https://github.com/stevemao/github-issue-templates/tree/master
+https://github.com/stevemao/github-issue-templates/tree/master/conversational
