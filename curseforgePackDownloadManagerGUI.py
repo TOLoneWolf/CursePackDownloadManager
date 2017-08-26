@@ -167,14 +167,14 @@ class VersionSelectionMenu(Toplevel):
         self.pack_version_lists = pack_version_lists
         if self.pack_version_lists is not None:
             for versions in self.pack_version_lists[2]:
-                type = versions[0]
+                type_of_release = versions[0]
                 if versions[0] == "R":
-                    type = "Release"
+                    type_of_release = "Release"
                 elif versions[0] == "B":
-                    type = "Beta"
+                    type_of_release = "Beta"
                 elif versions[0] == "A":
-                    type = "Alpha"
-                self.listbox_version_list.append(type + " - " + versions[2] + " (ID: " + versions[1] + ")")
+                    type_of_release = "Alpha"
+                self.listbox_version_list.append(type_of_release + " - " + versions[2] + " (ID: " + versions[1] + ")")
         self.lbl_select_version = ttk.Label(self, text="Select the desired version of the pack to install.")
         self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (self.pack_version_lists[0], self.pack_version_lists[1]))
         self.listbox_version = Listbox(self, height=12)
