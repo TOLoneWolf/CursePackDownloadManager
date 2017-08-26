@@ -177,15 +177,26 @@ class VersionSelectionMenu(Toplevel):
                 self.listbox_version_list.append(type_of_release + " - " + versions[2] + " (ID: " + versions[1] + ")")
         self.lbl_select_version = ttk.Label(self, text="Select the desired version of the pack to install.")
         self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (self.pack_version_lists[0], self.pack_version_lists[1]))
-        self.listbox_version = Listbox(self, height=12)
+        # --- container
+        self.listbox_version_container = ttk.Frame(self)
+        self.listbox_version = Listbox(self.listbox_version_container, height=12)
         self.listbox_version.bind('<<ListboxSelect>>', self.update_selected)
+        self.scroll_listbox_version = ttk.Scrollbar(self.listbox_version_container, command=self.listbox_version.yview)
+        # --- config container contents
+        self.listbox_version_container.columnconfigure(0, weight=1)
+        self.listbox_version_container.columnconfigure(1, weight=0)
+        self.listbox_version_container.rowconfigure(0, weight=1)
+        self.listbox_version.grid(column=0, row=0, sticky='NESW', columnspan=1)
+        self.listbox_version.focus()
+        self.scroll_listbox_version.grid(column=1, row=0, sticky='NESW', columnspan=1)
+        self.listbox_version['yscrollcommand'] = self.scroll_listbox_version.set
+        # ---
         self.button_submit = ttk.Button(self, text="Download Selected", command=self.download_selected_pack_version)
         self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
         self.lbl_select_version.grid(column=0, row=0, sticky='N', columnspan=2)
         self.lbl_project_id.grid(column=0, row=1, sticky='N', columnspan=2)
-        self.listbox_version.grid(column=0, row=2, sticky='EW', columnspan=2)
-        self.listbox_version.focus()
+        self.listbox_version_container.grid(column=0, row=2, sticky='NESW', columnspan=2)
         self.button_submit.grid(column=0, row=3, sticky='NESW')
         self.button_cancel.grid(column=1, row=3, sticky='NESW')
         if self.pack_version_lists is not None:
