@@ -38,8 +38,8 @@ def center(toplevel):
 class NewFromCurseUrl(Toplevel):
     def __init__(self):
         Toplevel.__init__(self)
-        self.minsize(width=400, height=75)
-        self.maxsize(width=400, height=75)
+        self.minsize(width=400, height=150)
+        self.maxsize(width=400, height=150)
         self.resizable(FALSE, FALSE)
         self.protocol("WM_DELETE_WINDOW", self.close_window)
         self.title("New From CurseForge URL")
@@ -48,22 +48,24 @@ class NewFromCurseUrl(Toplevel):
         self.grab_set()
         for column_index in range(2):
             self.columnconfigure(column_index, weight=1)
-        for row_index in range(3):
+        for row_index in range(4):
             self.rowconfigure(row_index, weight=1)
 
         self.lbl_entry_url = ttk.Label(self, text="Enter MOD_PACK_NAME Here: \n"
                                                   "Example: https://minecraft.curseforge.com/projects/MOD_PACK_NAME")
         self.entry_mod_pack_name = ttk.Entry(self)
+        self.lbl_feedback_info = ttk.Label(self, text="")
         # FIXME Remove this debug line below.
-        self.entry_mod_pack_name.insert(END, "244939")
+        self.entry_mod_pack_name.insert(END, "triarcraft")
         self.button_submit = ttk.Button(self, text="Enter", command=self.fetch_pack_from_url)
         self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
         self.lbl_entry_url.grid(column=0, row=0, sticky='N', columnspan=2)
         self.entry_mod_pack_name.grid(column=0, row=1, sticky='EW', columnspan=2)
         self.entry_mod_pack_name.focus()
-        self.button_submit.grid(column=0, row=2, sticky='NESW')
-        self.button_cancel.grid(column=1, row=2, sticky='NESW')
+        self.lbl_feedback_info.grid(column=0, row=2, sticky='N', columnspan=2)
+        self.button_submit.grid(column=0, row=3, sticky='NESW')
+        self.button_cancel.grid(column=1, row=3, sticky='NESW')
         self.bind('<Return>', self.fetch_pack_from_url)
 
     def close_window(self):
@@ -71,15 +73,15 @@ class NewFromCurseUrl(Toplevel):
         self.destroy()
 
     def fetch_pack_from_url(self, event=None):
-        manager = CurseDownloader()
+        self.lbl_feedback_info.config(text="")
+        # project_identifier: get user input, remove left and right white space, replace any remaining internal spaces \
+        # with dash/negative char, and convert any uppercase letters to lower, and finally store it in var.
         project_identifier = self.entry_mod_pack_name.get()
         pack_version_response = manager.retrieve_pack_version_lists(project_identifier)
         if pack_version_response is None:
-            messagebox.showerror(
-                "No Pack Found By Name/ID", "Mod pack name/ID returned no versions."
-                "\nPlease make sure you typed it exactly as what is shown in your web browser.")
-            self.close_window()
+            self.lbl_feedback_info.config(text="Failed: Check ID / Name is correct and try again.")
         else:
+            self.lbl_feedback_info.config(text="")
             project_id = pack_version_response[0]
             project_name = pack_version_response[1]
             bare_pack_version_list = pack_version_response[2]
@@ -161,10 +163,10 @@ class VersionSelectionMenu(Toplevel):
             self.rowconfigure(row_index, weight=1)
 
         self.listbox_version_list = []
-        self.current_selection = -1
+        self.current_selection = 0
         self.pack_version_lists = pack_version_lists
-        if pack_version_lists is not None:
-            for versions in pack_version_lists[2]:
+        if self.pack_version_lists is not None:
+            for versions in self.pack_version_lists[2]:
                 type = versions[0]
                 if versions[0] == "R":
                     type = "Release"
@@ -173,12 +175,11 @@ class VersionSelectionMenu(Toplevel):
                 elif versions[0] == "A":
                     type = "Alpha"
                 self.listbox_version_list.append(type + " - " + versions[2] + " (ID: " + versions[1] + ")")
-        print(self.listbox_version_list)
         self.lbl_select_version = ttk.Label(self, text="Select the desired version of the pack to install.")
-        self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (pack_version_lists[0], pack_version_lists[1]))
+        self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (self.pack_version_lists[0], self.pack_version_lists[1]))
         self.listbox_version = Listbox(self, height=12)
         self.listbox_version.bind('<<ListboxSelect>>', self.update_selected)
-        self.button_submit = ttk.Button(self, text="Enter", command=self.download_selected_pack_version)
+        self.button_submit = ttk.Button(self, text="Download Selected", command=self.download_selected_pack_version)
         self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
         self.lbl_select_version.grid(column=0, row=0, sticky='N', columnspan=2)
@@ -187,29 +188,48 @@ class VersionSelectionMenu(Toplevel):
         self.listbox_version.focus()
         self.button_submit.grid(column=0, row=3, sticky='NESW')
         self.button_cancel.grid(column=1, row=3, sticky='NESW')
-        for version in self.listbox_version_list:
-            self.listbox_version.insert(END, version)
-        project_id = pack_version_lists[0]
-        project_name = pack_version_lists[1]
-        bare_pack_version_list = pack_version_lists[2]
+        if self.pack_version_lists is not None:
+            for version in self.listbox_version_list:
+                self.listbox_version.insert(END, version)
+        else:
+            self.button_submit['state'] = DISABLED  # Something failed better not allow them to continue.
+        self.listbox_version.selection_set(0)
+        self.listbox_version.activate(0)
+        print("Debug:")
+        print(self.listbox_version_list)
+        print(self.current_selection)
+        print(self.listbox_version.curselection())
+        project_id = self.pack_version_lists[0]
+        project_name = self.pack_version_lists[1]
+        bare_pack_version_list = self.pack_version_lists[2]
 
     def update_selected(self, *args):
-        self.current_selection = self.listbox_version.curselection()[0]
+        if self.listbox_version.curselection() == ():
+            self.current_selection = 0
+        else:
+            self.current_selection = self.listbox_version.curselection()[0]
+        print("Debug:")
+        print(self.current_selection)
+        print(self.listbox_version.curselection())
         # print(self.listbox_version_list[self.current_selection])
         # print(self.pack_version_lists[2][self.current_selection][1])
         # pass
 
     def download_selected_pack_version(self):
         print("download_selected_pack_version")
-        # self.current_selection = self.listbox_version.curselection()[0]
+        self.update_selected()
         print(self.listbox_version_list[self.current_selection])
-        # TODO: Check cashe for existing copy.
-        # TODO: If copy doesn't exist then download selected version.
+        print(self.current_selection)
+        print(self.pack_version_lists[1], self.pack_version_lists[2][self.current_selection][1])
         # TODO: Ask for install directory, folder name.
         #   TODO: Check if already exists.
         #   TODO: Ask if you want to replace existing or cancel.
         # TODO: Unpack to selected directory.
         # TODO: Create pack setting/info file (update url, project id, curFileID aka version, etc)
+
+        manager.download_modpack_zip(project_name=self.pack_version_lists[1],
+                                     project_id=self.pack_version_lists[0],
+                                     file_id=self.pack_version_lists[2][self.current_selection][1])
         pass
 
     def close_window(self):
@@ -331,4 +351,5 @@ if __name__ == '__main__':
     # needs to be inside a Tk() master window to display the askstring.
     # ask = simpledialog.askstring("test", "yo")
     initialize_program_environment()
+    manager = CurseDownloader()
     RootWindow()

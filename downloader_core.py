@@ -20,6 +20,10 @@ PROGRAM_NAME = 'Curse Pack Download Manager'
 PROGRAM_VERSION_NUMBER = '0.0.0.1'
 PROGRAM_VERSION_BUILD = 'Alpha'
 
+CACHE_PATH = "curse_download_cache"
+MODPACK_ZIP_CACHE = CACHE_PATH + "/" + "modpacks_cache"
+MOD_CACHE = CACHE_PATH + "/" + "mods_cache"
+
 
 def unzip(path_to_zip_file, dst_dir=None):
     """
@@ -69,7 +73,6 @@ def copy_instance(existing_instance_dir, new_copy_dir):
 
 
 class CurseDownloader:
-    # TODO Redo the downloader into this function to make it callable to both console and GUI
     def __init__(self):
         self.isDone = False
         self.sess = requests.Session()
@@ -99,15 +102,23 @@ class CurseDownloader:
         :param req_session: requests.session() to use to request the url content.
         :return: List[project_id, project_name, version_list[0=type,1=id,2=title]]
         """
+        if project_identifier is None:
+            return None
+        if type(project_identifier) is str:
+            # project_identifier: get user input, remove left and right white space,
+            #  replace any remaining internal spaces with dash/negative char,
+            #  convert any uppercase letters to lower, and finally store it in var.
+            project_identifier = project_identifier.strip().replace(" ", "-").lower()
+            if project_identifier == "":
+                return None
+
         if req_session is None:  # No session provided so create one and close it after request is finished with it.
-            # req_session = requests.session()
-            req_session = self.sess
-            sess_response = req_session.get(
-                "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
+            req_session = requests.session()
+            # req_session = self.sess
+        sess_response = req_session.get(
+            "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
+        if req_session is None:
             req_session.close()
-        else:  # Session is managed from outside this function.
-            sess_response = req_session.get(
-                "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
 
         # print("status code: %d" % sess_response.status_code)
         if sess_response.status_code == 200:
@@ -158,6 +169,50 @@ class CurseDownloader:
             else:
                 return None
 
+    def download_modpack_zip(self, project_name, project_id, file_id, session_id=None):
+        print(project_name, file_id)
+        if session_id is None:
+            sess = requests.session()
+            close_sess = True
+        else:
+            sess = session_id
+            close_sess = True
+
+        #  Check cache for file first.
+        dep_cache_dir = Path(MODPACK_ZIP_CACHE + "/" + str(project_id) + "/" + str(file_id))
+        if dep_cache_dir.is_dir():
+            cache_file = [files for files in dep_cache_dir.iterdir()]  # Create list with files from directory.
+            if len(cache_file) >= 1:  # if there is at least one file.
+                cache_file = cache_file[0]  # copy name of first file to var.
+                print(cache_file)
+                return  # File exists skip download phase.
+
+        # TODO: Download modpack.zip
+        request_file_response = sess.get(
+            "https://minecraft.curseforge.com/projects/{0}/files/{1}/download".format(
+                project_name, file_id), stream=True)
+        print(request_file_response.url)
+        if request_file_response.status_code == 200:
+            file_url = Path(request_file_response.url)
+            file_name = unquote(file_url.name).split('?')[0]
+            print(file_name)
+            total_size = int(request_file_response.headers.get('content-length', 0))
+            self.fileSize = total_size
+            with open(CACHE_PATH + '/modpack.zip.temp', 'wb') as f:
+                for chunk in request_file_response.iter_content(1024):
+                    self.currentProgress += len(chunk)
+                    f.write(chunk)
+
+            make_sure_path_exists(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id)
+            shutil.move(CACHE_PATH + '/modpack.zip.temp',
+                        MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
+        else:
+            print("request pack.zip error.")
+        if close_sess:
+            sess.close()
+        print("FD Done.")
+
+    # TODO Redo the downloader into this function to make it callable to both console and GUI
     def download_mods(self, project_id="242001", file_id="2349268"):
         try:
             # TODO Fix ProjectID to actual ID
@@ -199,11 +254,8 @@ def make_sure_path_exists(path):
 
 def initialize_program_environment():
     print("Curse PDM: Checking/Initializing program environment\n")
-    cache_path = "curse_download_cache"
-    modpack_zip_cache = "modpacks_cache"
-    mod_cache = "mods_cache"
-    make_sure_path_exists(cache_path + "/" + modpack_zip_cache)
-    make_sure_path_exists(cache_path + "/" + mod_cache)
+    make_sure_path_exists(MODPACK_ZIP_CACHE)
+    make_sure_path_exists(MOD_CACHE)
     # TODO: Program settings file. create if non-existing.
     # TODO: Add other steps that should be check at startup time.
     pass
