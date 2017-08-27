@@ -109,15 +109,6 @@ class NewFromCurseUrl(Toplevel):
             if len(alpha_only_list) > 0:
                 for listElement in alpha_only_list:
                     print(listElement)
-        # TODO Implement mod downloading after url fetch and zip download.
-        # workThread = threading.Thread(target=manager.download_mods, args=("242001", "2349268"))
-        # workThread.start()
-        # while not manager.isDone:
-        #     time.sleep(0.05)
-        #     if manager.fileSize is not None:
-        #         percent = round((manager.currentProgress/manager.fileSize) * 100, 0)
-        #         print(str(percent) + " P: " + str(manager.currentProgress) + "/" + str(manager.fileSize))
-        # print("Done")
             VersionSelectionMenu(pack_version_response)
             self.close_window()
 
