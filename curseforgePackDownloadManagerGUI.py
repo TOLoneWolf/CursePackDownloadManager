@@ -146,6 +146,66 @@ class OpenPackZip:
                     # TODO download mods.
 
 
+class SelectUnpackDirectory(Toplevel):
+    # TODO: Select unpack directory.
+    def __init__(self, src_zip):
+        self.src_zip = src_zip
+        Toplevel.__init__(self)
+        self.minsize(width=600, height=200)
+        self.maxsize(width=600, height=200)
+        self.resizable(FALSE, FALSE)
+        self.protocol("MW_DELETE_WINDOW", self.close_window)
+        self.title("Select Directory")
+        center(self)
+        self.focus()
+        self.grab_set()
+        for column_index in range(2+1):
+            self.columnconfigure(column_index, weight=1)
+        for row_index in range(5+1):
+            self.rowconfigure(row_index, weight=1)
+
+        self.lbl_entry_name = ttk.Label(self, text="Enter Instance Name: ")
+        self.entry_instance_name = ttk.Entry(self)
+        self.lbl_dst_folder = ttk.Label(self, text="Select Destination Folder: ")
+        self.btn_dst_folder = ttk.Button(self, text="Browse", command=self.browse_folder)
+        self.entry_directory = ttk.Entry(self)
+        self.btn_submit = ttk.Button(self, text="Unpack", command=self.process)
+        self.btn_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
+        # ---
+        self.lbl_entry_name.grid(column=0, row=0, sticky='NESW', columnspan=2)
+        self.entry_instance_name.grid(column=0, row=1, sticky='EW', columnspan=1)
+        self.lbl_dst_folder.grid(column=0, row=2, sticky='NESW')
+        self.btn_dst_folder.grid(column=2, row=2, sticky='NESW')
+        self.entry_directory.grid(column=0, row=3, sticky='EW', columnspan=3)
+        self.btn_submit.grid(column=0, row=5, sticky='NESW')
+        self.btn_cancel.grid(column=2, row=5, sticky='NESW')
+
+    def close_window(self):
+        self.grab_release()
+        self.destroy()
+
+    def browse_folder(self):
+        path_dst_dir = filedialog.askdirectory(title="Select Destination Folder")
+        if not path_dst_dir == "":
+            self.entry_directory.insert(END, path_dst_dir)
+
+    def process(self):
+        mc_path = str(self.entry_directory.get()) + "/" + str(self.entry_instance_name.get())
+        print(mc_path)
+        unzip(self.src_zip, mc_path)
+        # manager.download_mods(mc_path)
+        # TODO Implement mod downloading after url fetch and zip download.
+        workThread = threading.Thread(target=manager.download_mods, args=(mc_path,))
+        workThread.start()
+        self.close_window()
+        while not manager.isDone:
+            time.sleep(0.05)
+            if manager.fileSize is not None:
+                percent = round((manager.current_progress/manager.fileSize) * 100, 0)
+                print(str(percent) + " P: " + str(manager.current_progress) + "/" + str(manager.fileSize))
+        print("Done")
+
+
 class VersionSelectionMenu(Toplevel):
     def __init__(self, pack_version_lists=None):
         Toplevel.__init__(self)
@@ -238,10 +298,11 @@ class VersionSelectionMenu(Toplevel):
         # TODO: Unpack to selected directory.
         # TODO: Create pack setting/info file (update url, project id, curFileID aka version, etc)
 
-        manager.download_modpack_zip(project_name=self.pack_version_lists[1],
-                                     project_id=self.pack_version_lists[0],
-                                     file_id=self.pack_version_lists[2][self.current_selection][1])
-        pass
+        src_zip = manager.download_modpack_zip(project_name=self.pack_version_lists[1],
+                                               project_id=self.pack_version_lists[0],
+                                               file_id=self.pack_version_lists[2][self.current_selection][1])
+        self.close_window()
+        SelectUnpackDirectory(src_zip)
 
     def close_window(self):
         self.grab_release()
@@ -274,10 +335,10 @@ class NewInstanceWindow(Toplevel):
         for row_index in range(5):
             self.rowconfigure(row_index, weight=1)
 
-        button_new_from_url = ttk.Button(self, text="New From Curse URL", command=NewFromCurseUrl)
-        button_new_from_zip = ttk.Button(self, text="New From Curse Pack.zip", command=OpenPackZip)
-        button_new_from_manifest = ttk.Button(self, text="New From Curse Manifest.json")
-        button_new_from_existing_instance = ttk.Button(self, text="Copy Existing Instance", command=CopyInstance)
+        button_new_from_url = ttk.Button(self, text="New From Curse URL", command=self.new_from_url)
+        button_new_from_zip = ttk.Button(self, text="New From Curse Pack.zip", command=self.open_pack_zip)
+        button_new_from_manifest = ttk.Button(self, text="New From Curse Manifest.json", command=self.pack_from_manifest)
+        button_new_from_existing_instance = ttk.Button(self, text="Copy Existing Instance", command=self.copy_instance)
         button_close_window = ttk.Button(self, text="Close", command=self.close_window)
         # ---
         button_new_from_url.grid(column=0, row=0, sticky='NESW')
@@ -289,6 +350,24 @@ class NewInstanceWindow(Toplevel):
     def close_window(self):
         self.grab_release()
         self.destroy()
+
+    def new_from_url(self):
+        self.close_window()
+        NewFromCurseUrl()
+
+    def open_pack_zip(self):
+        self.close_window()
+        OpenPackZip()
+
+    def pack_from_manifest(self):
+        self.close_window()
+        # TODO: Create from manifest.
+        print("pack_from_manifest: nothing here yet....")
+        pass
+
+    def copy_instance(self):
+        self.close_window()
+        CopyInstance()
 
 
 class EditInstance:
@@ -363,4 +442,6 @@ if __name__ == '__main__':
     # ask = simpledialog.askstring("test", "yo")
     initialize_program_environment()
     manager = CurseDownloader()
+    print("Cached files are stored here:\n %s\n" % os.path.abspath(CACHE_PATH))
     RootWindow()
+    manager.master_thread_running = False
