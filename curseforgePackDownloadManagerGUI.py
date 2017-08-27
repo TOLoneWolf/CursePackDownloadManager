@@ -1,3 +1,4 @@
+import argparse
 from tkinter import *
 from tkinter import ttk, simpledialog
 from tkinter import messagebox
@@ -9,13 +10,13 @@ import threading
 import time
 from pathlib import Path
 
-
 '''
 Author(s): TOLoneWolf
 License: in license.txt
 
 This contains the code used to make the GUI interface.
 '''
+
 
 
 instanceData = {}
@@ -137,7 +138,7 @@ class OpenPackZip:
                 # print("zip path: " + file_path)
                 # print("dst dir: " + dst_dir)
                 if os.path.exists(dst_dir):
-                    print("error: Folder With That Name Already Exists.")
+                    log.info("Folder With That Name Already Exists.")
                 else:
                     # FIXME dfsdfsdf
                     # TODO unpack zip file.

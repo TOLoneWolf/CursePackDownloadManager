@@ -1,3 +1,4 @@
+import argparse
 import shutil
 import zipfile
 from pathlib import Path
@@ -9,8 +10,42 @@ import os
 import os.path
 import sys
 import json
-
+import logging
 import time
+
+parser = argparse.ArgumentParser(description="Download Curse modpack mods")
+parser.add_argument("--manifest", help="manifest.json file from unzipped pack")
+parser.add_argument("--debug", dest="debug", action="store_true", help="Run in debugger mode.")
+args, unknown = parser.parse_known_args()
+
+if args.debug:
+    log_level = "DEBUG"
+
+else:
+    log_level = "WARNING"
+
+# --- Logger Settings
+LOG_FILE = "curseforgePDM.log"
+
+# --- Logger
+logFormatter = logging.Formatter("%(asctime)s[%(threadName)-12.12s][%(levelname)-5.5s][ln:%(lineno)d]%(message)s")
+log = logging.getLogger()
+log.setLevel(log_level)
+
+fileHandler = logging.FileHandler(LOG_FILE)
+fileHandler.setFormatter(logFormatter)
+log.addHandler(fileHandler)
+
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(logFormatter)
+log.addHandler(consoleHandler)
+
+log.critical("critical")  # numeric value 50
+log.error("error")  # numeric value 40
+log.warning("warning")  # numeric value 30
+log.info("info")  # numeric value 20
+log.debug("debug")  # numeric value 10
+# --- Logger
 
 '''
 Author(s): TOLoneWolf
@@ -122,19 +157,19 @@ class CurseDownloader:
         self.total_progress = 0
         self.total_progress_finish = 0
 
-    # FIXME This might no longer be needed thanks to the retrieve_pack_version_lists method below.
-    def download_curse_pack_url(self, url=None):
-        if url is None:
-            raise SyntaxError('The url argument was missing or empty.')
-        # https://mods.curse.com/modpacks/minecraft
-        # https://mods.curse.com/modpacks/minecraft/256183-ftb-presents-skyfactory-3
-        # https://www.feed-the-beast.com/projects/ftb-presents-skyfactory-3/files/latest
-        latest = self.sess.get("https://minecraft.curseforge.com/projects/" + str(url) + "/files/latest")
-        if latest.status_code == 200:
-            print(latest.url)
-        else:
-            print("Error: No Mod Pack Found At Provided Project Name/ID.")
-            print(latest.url)
+    # FIXME: This might no longer be needed thanks to the retrieve_pack_version_lists method below.
+    # def download_curse_pack_url(self, url=None):
+    #     if url is None:
+    #         raise SyntaxError('The url argument was missing or empty.')
+    #     # https://mods.curse.com/modpacks/minecraft
+    #     # https://mods.curse.com/modpacks/minecraft/256183-ftb-presents-skyfactory-3
+    #     # https://www.feed-the-beast.com/projects/ftb-presents-skyfactory-3/files/latest
+    #     latest = self.sess.get("https://minecraft.curseforge.com/projects/" + str(url) + "/files/latest")
+    #     if latest.status_code == 200:
+    #         print(latest.url)
+    #     else:
+    #         print("Error: No Mod Pack Found At Provided Project Name/ID.")
+    #         print(latest.url)
 
     # view-source:https://minecraft.curseforge.com/projects/project-ozone-2-reloaded/files
     def retrieve_pack_version_lists(self, project_identifier):
