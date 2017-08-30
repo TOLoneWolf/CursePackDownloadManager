@@ -92,4 +92,4 @@ ENV/
 .ropeproject
 
 .idea/
-curse_download_cache
+/curse_download_cache/

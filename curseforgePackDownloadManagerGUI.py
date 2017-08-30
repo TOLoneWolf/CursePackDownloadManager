@@ -78,7 +78,7 @@ class NewFromCurseUrl(Toplevel):
         # project_identifier: get user input, remove left and right white space, replace any remaining internal spaces \
         # with dash/negative char, and convert any uppercase letters to lower, and finally store it in var.
         project_identifier = self.entry_mod_pack_name.get()
-        pack_version_response = manager.retrieve_pack_version_lists(project_identifier)
+        pack_version_response = manager.get_modpack_version_list(project_identifier)
         if pack_version_response:  # If version list has contents.
             self.lbl_feedback_info.config(text="")
             VersionSelectionMenu(pack_version_response)
@@ -189,7 +189,7 @@ class VersionSelectionMenu(Toplevel):
         self.pack_version_lists = pack_version_lists
         self.available_version_types = [False, False, False]  # Release, Beta, Alpha
         if self.pack_version_lists is not None:
-            for versions in self.pack_version_lists[2]:
+            for versions in self.pack_version_lists[3]:
                 type_of_release = versions[0]
                 if versions[0] == "R":
                     self.available_version_types[0] = True
@@ -204,7 +204,7 @@ class VersionSelectionMenu(Toplevel):
 
         # --- GUI objects.
         self.lbl_select_version = ttk.Label(self, text="Select the desired version of the pack to install.")
-        self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (self.pack_version_lists[0], self.pack_version_lists[1]))
+        self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (self.pack_version_lists[1], self.pack_version_lists[2]))
         self.lbl_combo_release_type = ttk.Label(self, text="Release Types: ")
         self.combo_release_type = ttk.Combobox(self, state='readonly')
         self.combo_release_type.bind("<<ComboboxSelected>>", self.combo_release_type_update)
@@ -259,9 +259,9 @@ class VersionSelectionMenu(Toplevel):
         log.debug(self.listbox_version_list)
         log.debug(self.current_selection)
         log.debug(self.listbox_version.curselection())
-        project_id = self.pack_version_lists[0]
-        project_name = self.pack_version_lists[1]
-        bare_pack_version_list = self.pack_version_lists[2]
+        project_id = self.pack_version_lists[1]
+        project_name = self.pack_version_lists[2]
+        bare_pack_version_list = self.pack_version_lists[3]
 
     def combo_release_type_update(self, *_):
         # TODO: actually update the list.
@@ -270,7 +270,7 @@ class VersionSelectionMenu(Toplevel):
         print(self.combo_release_type.get())
         display_list = []
         list_only_these_versions = self.combo_release_type.get()
-        for listElement in self.pack_version_lists[2]:
+        for listElement in self.pack_version_lists[3]:
             if list_only_these_versions == "All":
                 display_list.append(listElement)
                 continue
@@ -304,7 +304,7 @@ class VersionSelectionMenu(Toplevel):
         print(self.current_selection)
         print(self.listbox_version.curselection())
         # print(self.listbox_version_list[self.current_selection])
-        # print(self.pack_version_lists[2][self.current_selection][1])
+        # print(self.pack_version_lists[3][self.current_selection][1])
         # pass
 
     def download_selected_pack_version(self):
@@ -312,16 +312,17 @@ class VersionSelectionMenu(Toplevel):
         self.update_selected()
         print(self.listbox_version_list[self.current_selection])
         print(self.current_selection)
-        print(self.pack_version_lists[1], self.pack_version_lists[2][self.current_selection][1])
+        print(self.pack_version_lists[2], self.pack_version_lists[3][self.current_selection][1])
         # TODO: Ask for install directory, folder name.
         #   TODO: Check if already exists.
         #   TODO: Ask if you want to replace existing or cancel.
         # TODO: Unpack to selected directory.
         # TODO: Create pack setting/info file (update url, project id, curFileID aka version, etc)
 
-        src_zip = manager.download_modpack_zip(project_name=self.pack_version_lists[1],
-                                               project_id=self.pack_version_lists[0],
-                                               file_id=self.pack_version_lists[2][self.current_selection][1])
+        src_zip = manager.download_modpack_zip(pack_source=self.pack_version_lists[0],
+                                               project_id=self.pack_version_lists[1],
+                                               project_name=self.pack_version_lists[2],
+                                               file_id=self.pack_version_lists[3][self.current_selection][1])
         self.close_window()
         SelectUnpackDirectory(src_zip)
 

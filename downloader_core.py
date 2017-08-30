@@ -99,27 +99,31 @@ def copy_instance(existing_instance_dir, new_copy_dir, sym_links=True):
     """
     :param existing_instance_dir: source directory string.
     :param new_copy_dir: destination directory string.
-    :param sys_links: copies sym_link paths.
+    :param sym_links: copies sym_link paths.
+    :return:
     """
-    log.debug("copy_instance\nsrc=" + existing_instance_dir + " " + "dst=" + new_copy_dir)
+    log.debug("copy_instance\nsrc=" + str(existing_instance_dir) + " " + "dst=" + str(new_copy_dir))
     shutil.copytree(src=existing_instance_dir, dst=new_copy_dir, symlinks=sym_links)
 
 
 def get_human_readable(size, precision=2, requestz=-1):
+    size = float(size)
     suffixes = ['B', 'KB', 'MB', 'GB', 'TB']
     suffix_index = 0
     if requestz == -1:
-        while size > 1024 and suffix_index < 4:
+        while size > 1024.0 and suffix_index < 4:
             suffix_index += 1  # increment the index of the suffix
             size /= 1024.0  # apply the division
-    elif (requestz >= 1 or requestz == 4):
+    else:
+        if requestz > 4:
+            requestz = 4
         i = 0
         while i < requestz:
             suffix_index += 1  # increment the index of the suffix
             size /= 1024.0  # apply the division
             i += 1
 
-    return "%s%s" % (str("{:.3g}".format(round(size, precision))), suffixes[suffix_index])
+    return str(round(size, precision)) + suffixes[suffix_index]
 
 
 class CurseDownloader:
@@ -133,7 +137,7 @@ class CurseDownloader:
         self.total_progress = 0
         self.total_progress_finish = 0
 
-    def reset_download_status(self):
+    def __reset_download_status(self):
         """
         :Resets all download status vars:
         :self.isDone: = False
@@ -151,7 +155,7 @@ class CurseDownloader:
         self.total_progress = 0
         self.total_progress_finish = 0
 
-    # FIXME: This might no longer be needed thanks to the retrieve_pack_version_lists method below.
+    # FIXME: This might no longer be needed thanks to the get_modpack_version_list method below.
     # def download_curse_pack_url(self, url=None):
     #     if url is None:
     #         raise SyntaxError('The url argument was missing or empty.')
@@ -160,12 +164,12 @@ class CurseDownloader:
     #     # https://www.feed-the-beast.com/projects/ftb-presents-skyfactory-3/files/latest
     #     latest = self.sess.get("https://minecraft.curseforge.com/projects/" + str(url) + "/files/latest")
     #     if latest.status_code == 200:
-    #         log.debug(latest.url)
+    #         log.debug(str(latest.url))
     #     else:
     #         log.debug("Error: No Mod Pack Found At Provided Project Name/ID.")
-    #         log.debug(latest.url)
+    #         log.debug(str(latest.url))
 
-    def retrieve_pack_version_lists(self, project_identifier):
+    def get_modpack_version_list(self, project_identifier):
         """
         :param project_identifier: curseforge project name or numeric id.
         :return: List[project_id, project_name, version_list[0=type,1=id,2=title]]
@@ -183,16 +187,20 @@ class CurseDownloader:
                 return []
         else:
             return []
+
         log.debug("https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
         sess_response = self.sess.get(
             "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
+        pack_source = "curseforge"
         log.debug("status code: %d" % sess_response.status_code)
+
         if sess_response.status_code == 404:  # If request found nothing, try ftb packs.
             # Test if Feed-The-Beast Pack.
             # https://www.feed-the-beast.com/projects/ftb-beyond/files
             log.debug("https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
             sess_response = self.sess.get(
                 "https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
+            pack_source = "ftb"
             log.debug("status code: %d" % sess_response.status_code)
 
         if sess_response.status_code == 200:
@@ -240,15 +248,21 @@ class CurseDownloader:
                         bare_pack_version_list.append(
                             ['A', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
 
-                return [project_id, project_name, bare_pack_version_list]
+                return [pack_source, project_id, project_name, bare_pack_version_list]
         return []
 
-
-
-
-    def download_modpack_zip(self, project_name, project_id, file_id, session_id=None):
-        self.reset_download_status()
+    def download_modpack_zip(self, pack_source, project_id, project_name, file_id, session_id=None):
+        self.__reset_download_status()
         log.info("download_modpack_zip\n" + "project_name: " + project_name + " file_id: " + file_id)
+        #  Check cache for file first.
+        dep_cache_dir = Path(MODPACK_ZIP_CACHE + "/" + str(project_id) + "/" + str(file_id))
+        if dep_cache_dir.is_dir():
+            cache_file = [files for files in dep_cache_dir.iterdir()]  # Create list with files from directory.
+            if len(cache_file) >= 1:  # if there is at least one file.
+                file_name = os.path.basename(os.path.normpath(cache_file[0] ))  # copy name of first file to var.
+                log.debug(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
+                return MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+
         if session_id is None:
             sess = requests.session()
             close_sess = True
@@ -256,18 +270,18 @@ class CurseDownloader:
             sess = session_id
             close_sess = True
 
-        #  Check cache for file first.
-        dep_cache_dir = Path(MODPACK_ZIP_CACHE + "/" + str(project_id) + "/" + str(file_id))
-        if dep_cache_dir.is_dir():
-            cache_file = [files for files in dep_cache_dir.iterdir()]  # Create list with files from directory.
-            if len(cache_file) >= 1:  # if there is at least one file.
-                file_name = os.path.basename(os.path.normpath(cache_file[0] ))  # copy name of first file to var.
-                return MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+        if pack_source == "curseforge":
+            request_file_response = sess.get(
+                "https://minecraft.curseforge.com/projects/{0}/files/{1}/download".format(
+                    project_name, file_id), stream=True)
+        elif pack_source == "ftb":
+            request_file_response = sess.get(
+                "https://www.feed-the-beast.com/projects/{0}/files/{1}/download".format(
+                    project_name, file_id), stream=True)
+        else:
+            return None  # Error detecting pack source url.
 
-        # TODO: Download modpack.zip
-        request_file_response = sess.get(
-            "https://minecraft.curseforge.com/projects/{0}/files/{1}/download".format(
-                project_name, file_id), stream=True)
+
         log.debug(request_file_response.url)
         if request_file_response.status_code == 200:
             file_url = Path(request_file_response.url)
@@ -301,7 +315,7 @@ class CurseDownloader:
 
     # TODO Redo the downloader into this function to make it callable to both console and GUI
     def download_mods(self, working_dir):
-        self.reset_download_status()
+        self.__reset_download_status()
         # project_id = "242001"
         # file_id = "2349268"
         # working_dir = "D:/Users/User/Downloads/Minecraft/#-cursePackManifests/test/"
@@ -443,7 +457,7 @@ class CurseDownloader:
 
                 # Try to add file to cache.
                 if not dep_cache_dir.exists():
-                    log.debug("dep_cache.mkdir: " + dep_cache_dir)
+                    log.debug("dep_cache.mkdir: " + str(dep_cache_dir))
                     dep_cache_dir.mkdir(parents=True)
 
                 log.debug("shutil.move: src: " + str(Path(CACHE_PATH) / file_name) +
@@ -460,7 +474,7 @@ class CurseDownloader:
 
                 current_files_dl += 1
                 self.total_progress = current_files_dl
-                log.debug("current_files_dl: " + current_files_dl)
+                log.debug("current_files_dl: " + str(current_files_dl))
 
                 # TODO: ADD: ERRED MOD DOWNLOADS DISPLAY
                 # if len(erred_mod_downloads) is not 0:
@@ -487,7 +501,7 @@ class CurseDownloader:
 
 
 def create_dir_if_not_exist(path):
-    log.debug("create_dir_if_not_exist: " + path)
+    log.debug("create_dir_if_not_exist: " + str(path))
     if not os.path.exists(path):
         try:
             os.makedirs(path)
