@@ -446,11 +446,16 @@ class CurseDownloader:
 
                 print(str("[{0}/{1}] " + file_name + " (DL: " + get_human_readable(full_file_size) + ")").format(
                     current_files_dl, total_files_dl))
+                if self.master_thread_running is False:
+                    log.error("Main Thread Dead, Joining it in the after life.")
+                    sys.exit()
                 with open(str(Path(CACHE_PATH) / file_name), 'wb') as file_data:
                     for chunk in requested_file_sess.iter_content(chunk_size=1024):
                         self.current_progress += len(chunk)
                         file_data.write(chunk)
                         if self.master_thread_running is False:
+                            file_data.close()
+                            os.remove(str(Path(CACHE_PATH) / file_name))
                             log.error("Main Thread Dead, Joining it in the after life.")
                             sys.exit()
                     self.current_progress = 0
