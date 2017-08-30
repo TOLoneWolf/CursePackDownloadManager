@@ -83,32 +83,6 @@ class NewFromCurseUrl(Toplevel):
             self.lbl_feedback_info.config(text="Failed: Check ID / Name is correct and try again.")
         else:
             self.lbl_feedback_info.config(text="")
-            project_id = pack_version_response[0]
-            project_name = pack_version_response[1]
-            bare_pack_version_list = pack_version_response[2]
-
-            # TODO Implement Version Selection And Then Download Selected Version.
-            release_only_list = []
-            beta_only_list = []
-            alpha_only_list = []
-            for listElement in bare_pack_version_list:
-                if listElement[0] == "R":
-                    release_only_list.append(listElement)
-                if listElement[0] == "B":
-                    beta_only_list.append(listElement)
-                if listElement[0] == "A":
-                    alpha_only_list.append(listElement)
-
-            print("Project ID: " + project_id)
-            if len(release_only_list) > 0:
-                for listElement in release_only_list:
-                    print(listElement)
-            if len(beta_only_list) > 0:
-                for listElement in beta_only_list:
-                    print(listElement)
-            if len(alpha_only_list) > 0:
-                for listElement in alpha_only_list:
-                    print(listElement)
             VersionSelectionMenu(pack_version_response)
             self.close_window()
 
@@ -209,62 +183,117 @@ class VersionSelectionMenu(Toplevel):
         center(self)
         self.focus()
         self.grab_set()
-        for column_index in range(2):
-            self.columnconfigure(column_index, weight=1)
-        for row_index in range(4):
-            self.rowconfigure(row_index, weight=1)
-
+        # --- Variables and stuff.
         self.listbox_version_list = []
         self.current_selection = 0
         self.pack_version_lists = pack_version_lists
+        self.available_version_types = [False, False, False]  # Release, Beta, Alpha
         if self.pack_version_lists is not None:
             for versions in self.pack_version_lists[2]:
                 type_of_release = versions[0]
                 if versions[0] == "R":
+                    self.available_version_types[0] = True
                     type_of_release = "Release"
                 elif versions[0] == "B":
+                    self.available_version_types[1] = True
                     type_of_release = "Beta"
                 elif versions[0] == "A":
+                    self.available_version_types[2] = True
                     type_of_release = "Alpha"
                 self.listbox_version_list.append(type_of_release + " - " + versions[2] + " (ID: " + versions[1] + ")")
+
+        # --- GUI objects.
         self.lbl_select_version = ttk.Label(self, text="Select the desired version of the pack to install.")
         self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (self.pack_version_lists[0], self.pack_version_lists[1]))
-        # --- container
+        self.lbl_combo_release_type = ttk.Label(self, text="Release Types: ")
+        self.combo_release_type = ttk.Combobox(self, state='readonly')
+        self.combo_release_type.bind("<<ComboboxSelected>>", self.combo_release_type_update)
+        # --- container object.
         self.listbox_version_container = ttk.Frame(self)
         self.listbox_version = Listbox(self.listbox_version_container, height=12)
         self.listbox_version.bind('<<ListboxSelect>>', self.update_selected)
         self.scroll_listbox_version = ttk.Scrollbar(self.listbox_version_container, command=self.listbox_version.yview)
-        # --- config container contents
-        self.listbox_version_container.columnconfigure(0, weight=1)
-        self.listbox_version_container.columnconfigure(1, weight=0)
-        self.listbox_version_container.rowconfigure(0, weight=1)
+        # --- config container contents.
         self.listbox_version.grid(column=0, row=0, sticky='NESW', columnspan=1)
         self.listbox_version.focus()
         self.scroll_listbox_version.grid(column=1, row=0, sticky='NESW', columnspan=1)
         self.listbox_version['yscrollcommand'] = self.scroll_listbox_version.set
         # ---
+        self.listbox_version_container.columnconfigure(0, weight=1)
+        self.listbox_version_container.columnconfigure(1, weight=0)
+        self.listbox_version_container.rowconfigure(0, weight=1)
+        # --- GUI objects.
         self.button_submit = ttk.Button(self, text="Download Selected", command=self.download_selected_pack_version)
         self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
-        # ---
+        # -- GUI grid config.
         self.lbl_select_version.grid(column=0, row=0, sticky='N', columnspan=2)
-        self.lbl_project_id.grid(column=0, row=1, sticky='N', columnspan=2)
-        self.listbox_version_container.grid(column=0, row=2, sticky='NESW', columnspan=2)
-        self.button_submit.grid(column=0, row=3, sticky='NESW')
-        self.button_cancel.grid(column=1, row=3, sticky='NESW')
+        self.lbl_project_id.grid(column=0, row=1, sticky='', columnspan=2)
+        self.lbl_combo_release_type.grid(column=0, row=2, sticky='E')
+        self.combo_release_type.grid(column=1, row=2, sticky='W')
+        self.listbox_version_container.grid(column=0, row=3, sticky='NESW', columnspan=2)
+        self.button_submit.grid(column=0, row=4, sticky='NESW')
+        self.button_cancel.grid(column=1, row=4, sticky='NESW')
+
+        for column_index in range(1+1):
+            self.columnconfigure(column_index, weight=1)
+        for row_index in range(4+1):
+            self.rowconfigure(row_index, weight=1)
+
         if self.pack_version_lists is not None:
             for version in self.listbox_version_list:
                 self.listbox_version.insert(END, version)
+            self.combo_release_type['values'] = ('All',)
+            self.combo_release_type.set('All',)
+            if self.available_version_types[0]:
+                self.combo_release_type['values'] = self.combo_release_type['values'] + ('Release',)
+            if self.available_version_types[1]:
+                self.combo_release_type['values'] = self.combo_release_type['values'] + ('Beta',)
+            if self.available_version_types[2]:
+                self.combo_release_type['values'] = self.combo_release_type['values'] + ('Alpha',)
+
         else:
             self.button_submit['state'] = DISABLED  # Something failed better not allow them to continue.
         self.listbox_version.selection_set(0)
         self.listbox_version.activate(0)
-        print("Debug:")
-        print(self.listbox_version_list)
-        print(self.current_selection)
-        print(self.listbox_version.curselection())
+        log.debug("Version Current Selection:")
+        log.debug(self.listbox_version_list)
+        log.debug(self.current_selection)
+        log.debug(self.listbox_version.curselection())
         project_id = self.pack_version_lists[0]
         project_name = self.pack_version_lists[1]
         bare_pack_version_list = self.pack_version_lists[2]
+
+    def combo_release_type_update(self, *_):
+        # TODO: actually update the list.
+        # TODO Implement Version Selection And Then Download Selected Version.
+        print("combo")
+        print(self.combo_release_type.get())
+        display_list = []
+        list_only_these_versions = self.combo_release_type.get()
+        for listElement in self.pack_version_lists[2]:
+            if list_only_these_versions == "All":
+                display_list.append(listElement)
+                continue
+
+            if list_only_these_versions == "Release":
+                if listElement[0] == "R":
+                    display_list.append(listElement)
+                    continue
+
+            if list_only_these_versions == "Beta":
+                if listElement[0] == "B":
+                    display_list.append(listElement)
+                    continue
+
+            if list_only_these_versions == "Alpha":
+                if listElement[0] == "A":
+                    display_list.append(listElement)
+                    continue
+        self.listbox_version.delete(0, END)
+        for listElement in display_list:
+            self.listbox_version.insert(END, listElement)
+
+
 
     def update_selected(self, *args):
         if self.listbox_version.curselection() == ():
