@@ -172,14 +172,14 @@ class CurseDownloader:
         :return: List[project_id, project_name, version_list[0=type,1=id,2=title]]
         """
         if project_identifier is None:
-            return None
+            return []
         if type(project_identifier) is str:
             # project_identifier: get user input, remove left and right white space,
             #  replace any remaining internal spaces with dash/negative char,
             #  convert any uppercase letters to lower, and finally store it in var.
             project_identifier = project_identifier.strip().replace(" ", "-").lower()
             if project_identifier == "":
-                return None
+                return []
 
         sess_response = self.sess.get(
             "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
