@@ -11,7 +11,33 @@ import os.path
 import sys
 import json
 import logging
-import time
+
+'''
+Author(s): TOLoneWolf
+License: in license.txt
+
+This contains the core functions of the downloader to separate it from the input interface types CLI and/or GUI.
+'''
+
+# --- Logger Settings
+LOG_FILE = "curseforgePDM.log"
+
+# --- Settings
+PROGRAM_NAME = 'Curse Pack Download Manager'
+PROGRAM_VERSION_NUMBER = '0.0.0.1'
+PROGRAM_VERSION_BUILD = 'Alpha'
+
+CACHE_PATH = "curse_download_cache"
+MODPACK_ZIP_CACHE = CACHE_PATH + "/" + "modpacks_cache"
+MOD_CACHE = CACHE_PATH + "/" + "mods_cache"
+CONFIG_FILE = "curseforgePDM.json"
+program_config_settings = {'key1': 'value1',
+                           'key2': 'value2'}
+sess = requests.session()
+sess.headers.update({
+    'User-Agent': requests.utils.default_user_agent() +
+    ' ' + PROGRAM_NAME + '/' + PROGRAM_VERSION_NUMBER})
+
 
 parser = argparse.ArgumentParser(description="Download Curse modpack mods")
 parser.add_argument("--manifest", help="manifest.json file from unzipped pack")
@@ -22,10 +48,7 @@ if args.debug:
     log_level = "DEBUG"
 
 else:
-    log_level = "WARNING"
-
-# --- Logger Settings
-LOG_FILE = "curseforgePDM.log"
+    log_level = "WARNING"  # Default.
 
 # --- Logger
 logFormatter = logging.Formatter("%(asctime)s[%(threadName)-12.12s][%(levelname)-5.5s][ln:%(lineno)d]%(message)s")
@@ -40,28 +63,27 @@ consoleHandler = logging.StreamHandler()
 consoleHandler.setFormatter(logFormatter)
 log.addHandler(consoleHandler)
 
-log.critical("critical")  # numeric value 50
-log.error("error")  # numeric value 40
-log.warning("warning")  # numeric value 30
-log.info("info")  # numeric value 20
-log.debug("debug")  # numeric value 10
-# --- Logger
-
-'''
-Author(s): TOLoneWolf
-License: in license.txt
-
-This contains the core functions of the downloader to separate it from the input interface types CLI and/or GUI.
-'''
+# # --- Test logger levels.
+# log.critical("critical")  # numeric value 50
+# log.error("error")  # numeric value 40
+# log.warning("warning")  # numeric value 30
+# log.info("info")  # numeric value 20
+# log.debug("debug")  # numeric value 10
+# # ---
 
 
-PROGRAM_NAME = 'Curse Pack Download Manager'
-PROGRAM_VERSION_NUMBER = '0.0.0.1'
-PROGRAM_VERSION_BUILD = 'Alpha'
+def load_settings():
+    with open(CONFIG_FILE, 'r') as file:
+        global program_config_settings
+        program_config_settings = json.load(file)
 
-CACHE_PATH = "curse_download_cache"
-MODPACK_ZIP_CACHE = CACHE_PATH + "/" + "modpacks_cache"
-MOD_CACHE = CACHE_PATH + "/" + "mods_cache"
+    # # edit the data
+    # program_config_settings['key3'] = 'value3'
+
+
+def save_settings():
+    with open(CONFIG_FILE, 'w') as file:
+        json.dump(program_config_settings, file, indent=4, sort_keys=True)
 
 
 def unzip(path_to_zip_file, dst_dir=None):
@@ -128,32 +150,21 @@ def get_human_readable(size, precision=2, requestz=-1):
 
 class CurseDownloader:
     def __init__(self):
-        self.sess = requests.Session()
         self.master_thread_running = True
-        self.isDone = False
-        self.fileSize = None
-        self.current_progress = 0
-        self.current_progress_finish = 0
+        self.is_done = False
+        self.file_size = 0
+        self.current_file_size = 0
         self.total_progress = 0
-        self.total_progress_finish = 0
+        self.current_progress = 0
+        self.return_arg = ''  # if threaded this is the response.
 
-    def __reset_download_status(self):
-        """
-        :Resets all download status vars:
-        :self.isDone: = False
-        :self.fileSize: = None
-        :self.current_progress: = 0
-        :self.current_progress_finish: = 0
-        :self.total_progress: = 0
-        :self.total_progress_finish: = 0
-        :return: None
-        """
-        self.isDone = False
-        self.fileSize = None
-        self.current_progress = 0
-        self.current_progress_finish = 0
+    def reset_download_status(self):
+        self.is_done = False
+        self.file_size = 0
+        self.current_file_size = 0
         self.total_progress = 0
-        self.total_progress_finish = 0
+        self.current_progress = 0
+        self.return_arg = ''
 
     # FIXME: This might no longer be needed thanks to the get_modpack_version_list method below.
     # def download_curse_pack_url(self, url=None):
@@ -189,7 +200,7 @@ class CurseDownloader:
             return []
 
         log.debug("https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
-        sess_response = self.sess.get(
+        sess_response = sess.get(
             "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
         pack_source = "curseforge"
         log.debug("status code: %d" % sess_response.status_code)
@@ -198,7 +209,7 @@ class CurseDownloader:
             # Test if Feed-The-Beast Pack.
             # https://www.feed-the-beast.com/projects/ftb-beyond/files
             log.debug("https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
-            sess_response = self.sess.get(
+            sess_response = sess.get(
                 "https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
             pack_source = "ftb"
             log.debug("status code: %d" % sess_response.status_code)
@@ -251,24 +262,19 @@ class CurseDownloader:
                 return [pack_source, project_id, project_name, bare_pack_version_list]
         return []
 
-    def download_modpack_zip(self, pack_source, project_id, project_name, file_id, session_id=None):
-        self.__reset_download_status()
+    def download_modpack_zip(self, pack_source, project_id, project_name, file_id):
+        self.reset_download_status()
         log.info("download_modpack_zip\n" + "project_name: " + project_name + " file_id: " + file_id)
         #  Check cache for file first.
         dep_cache_dir = Path(MODPACK_ZIP_CACHE + "/" + str(project_id) + "/" + str(file_id))
         if dep_cache_dir.is_dir():
             cache_file = [files for files in dep_cache_dir.iterdir()]  # Create list with files from directory.
             if len(cache_file) >= 1:  # if there is at least one file.
-                file_name = os.path.basename(os.path.normpath(cache_file[0] ))  # copy name of first file to var.
+                file_name = os.path.basename(os.path.normpath(cache_file[0]))  # copy name of first file to var.
                 log.debug(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
-                return MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
-
-        if session_id is None:
-            sess = requests.session()
-            close_sess = True
-        else:
-            sess = session_id
-            close_sess = True
+                self.is_done = True
+                self.return_arg = MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+                return self.return_arg
 
         if pack_source == "curseforge":
             request_file_response = sess.get(
@@ -279,19 +285,23 @@ class CurseDownloader:
                 "https://www.feed-the-beast.com/projects/{0}/files/{1}/download".format(
                     project_name, file_id), stream=True)
         else:
-            return None  # Error detecting pack source url.
+            self.is_done = True
+            self.return_arg = ''
+            return self.return_arg  # Error detecting pack source url.
 
 
         log.debug(request_file_response.url)
         if request_file_response.status_code == 200:
             file_url = Path(request_file_response.url)
             file_name = unquote(file_url.name).split('?')[0]
-            total_size = int(request_file_response.headers.get('content-length', 0))
-            print(str(file_name + " (DL: " + get_human_readable(total_size) + ")"))
-            self.fileSize = total_size
+            self.file_size = int(request_file_response.headers.get('content-length', 0))
+            if self.file_size:
+                print(str(file_name + " (DL: " + get_human_readable(self.file_size) + ")"))
+            else:
+                print(str(file_name + " (DL: " + "size: ?" + ")"))
             with open(CACHE_PATH + '/modpack.zip.temp', 'wb') as f:
                 for chunk in request_file_response.iter_content(1024):
-                    self.current_progress += len(chunk)
+                    self.current_file_size += len(chunk)
                     f.write(chunk)
                     if self.master_thread_running is False:
                         sys.exit()
@@ -300,22 +310,21 @@ class CurseDownloader:
             shutil.move(CACHE_PATH + '/modpack.zip.temp',
                         MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
         else:
-            return None
-        if close_sess:
-            sess.close()
-        self.fileSize = 0
-        self.isDone = True
-        return MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+            self.is_done = True
+            self.return_arg = ''
+            return self.return_arg
+
+        self.is_done = True
+        self.return_arg = MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+        return self.return_arg
 
     def unpack_modpack_zip(self, src_dir, dst_folder_name, dst_dir):
-        # TODO: unpack.
         # FIXME: unpack.
         unzip(src_dir, dst_dir+dst_folder_name)
         pass
 
-    # TODO Redo the downloader into this function to make it callable to both console and GUI
     def download_mods(self, working_dir):
-        self.__reset_download_status()
+        self.reset_download_status()
         # project_id = "242001"
         # file_id = "2349268"
         # working_dir = "D:/Users/User/Downloads/Minecraft/#-cursePackManifests/test/"
@@ -333,7 +342,7 @@ class CurseDownloader:
             log.warning("manifest: " + str(manifest_path))
             print('I got a KeyError - reason %s' % str(e))
             print("Manifest Error. Make sure you selected a valid pack manifest.json")
-            self.isDone = True
+            self.is_done = True
             return None
 
         try:
@@ -345,7 +354,7 @@ class CurseDownloader:
             log.warning("manifest: " + str(manifest_path))
             print('I got a KeyError - reason %s' % str(e))
             print("Manifest Error. Make sure you selected a valid pack manifest.json")
-            self.isDone = True
+            self.is_done = True
             return None
 
         if override_path.exists():
@@ -359,27 +368,24 @@ class CurseDownloader:
             log.debug("mkdir: " + str(mods_path))
             mods_path.mkdir()
 
-        current_files_dl = 1
+            self.current_progress = 1
         try:
-            total_files_dl = len(manifest_json['files'])
-            if total_files_dl == 0:
+            self.total_progress = len(manifest_json['files'])
+            if self.total_progress:
                 print("No Mods")
         except KeyError as e:
             log.warning('files: I got a KeyError - reason %s' % str(e))
             print('I got a KeyError - reason %s' % str(e))
             print("Manifest Error. Make sure you selected a valid pack manifest.json")
-            self.isDone = True
+            self.is_done = True
             return None
 
         log.info("Cached files are stored here:\n %s\n" % os.path.abspath(CACHE_PATH))
         print("Cached files are stored here:\n %s\n" % os.path.abspath(CACHE_PATH))
-        print("%d files to download" % total_files_dl)
+        print("%d files to download" % self.total_progress)
 
-        self.total_progress_finish = total_files_dl
-        self.total_progress = current_files_dl
+        self.current_progress = self.current_progress
 
-        # FIXME: REMOVE THIS TEMP SESSION MANAGER
-        sess = requests.session()
         for dependency in manifest_json['files']:
             if self.master_thread_running is False:
                 log.error("Main Thread Dead, Joining it in the after life.")
@@ -392,10 +398,9 @@ class CurseDownloader:
                     dep_file = dep_files[0]
                     target_file = minecraft_path / "mods" / dep_file.name
                     shutil.copyfile(str(dep_file), str(target_file))
-                    print("[%d/%d] %s (cached)" % (current_files_dl, total_files_dl, target_file.name))
+                    print("[%d/%d] %s (in cache)" % (self.current_progress, self.total_progress, target_file.name))
 
-                    current_files_dl += 1
-                    self.total_progress = current_files_dl
+                    self.current_progress += 1
 
                     # Cache access is successful,
                     # Don't download the file
@@ -418,7 +423,7 @@ class CurseDownloader:
                 log.debug(str(requested_file_sess.headers['content-type']))
 
                 if (requested_file_sess.status_code == 404) or (file_name == "download"):
-                    print(str("[%d/%d] " + "Trying to resolve using alternate requesting.") % (current_files_dl, total_files_dl))
+                    print(str("[%d/%d] " + "Trying to resolve using alternate requesting.") % (self.current_progress, self.total_progress))
 
                     # If curse website fails to provide correct url try Dries API list.
                     # get the json from Dries:
@@ -428,37 +433,36 @@ class CurseDownloader:
                     r.raise_for_status()
                     main_json = r.json()
                     if "code" in main_json:
-                        print(str("[%d/%d] " + "ERROR FILE MISSING FROM SOURCE") % (current_files_dl, total_files_dl))
+                        print(str("[%d/%d] " + "ERROR FILE MISSING FROM SOURCE") % (self.current_progress, self.total_progress))
                         # TODO: READD: erred_mod_downloads.append(metaurl.url)
-                        current_files_dl += 1
+                        self.current_progress += 1
                         continue
                     fileurl = main_json["DownloadURL"]
                     file_name = main_json["FileNameOnDisk"]
                     requested_file_sess = sess.get(fileurl, stream=True)
 
-                try:
-                    # TODO: check if no content-length and skip setting.
-                    full_file_size = int(requested_file_sess.headers.get('content-length'))
-                    log.debug(str(requested_file_sess.headers['content-length']))
-                except TypeError:
-                    print(str("[%d/%d] " + "MISSING FILE SIZE") % (current_files_dl, total_files_dl))
-                    full_file_size = 100
+                self.file_size = int(requested_file_sess.headers.get('content-length', 0))
+                if self.file_size:
+                    print(
+                        str("[{0}/{1}] " + file_name + " (DL: " + get_human_readable(self.file_size) + ")").format(
+                            self.current_progress, self.total_progress))
+                else:
+                    print(str("[%d/%d] " + "MISSING FILE SIZE") % (self.current_progress, self.total_progress))
+                    self.file_size = 100
 
-                print(str("[{0}/{1}] " + file_name + " (DL: " + get_human_readable(full_file_size) + ")").format(
-                    current_files_dl, total_files_dl))
                 if self.master_thread_running is False:
                     log.error("Main Thread Dead, Joining it in the after life.")
                     sys.exit()
+                self.current_file_size = 0
                 with open(str(Path(CACHE_PATH) / file_name), 'wb') as file_data:
                     for chunk in requested_file_sess.iter_content(chunk_size=1024):
-                        self.current_progress += len(chunk)
+                        self.current_file_size += len(chunk)
                         file_data.write(chunk)
                         if self.master_thread_running is False:
                             file_data.close()
                             os.remove(str(Path(CACHE_PATH) / file_name))
                             log.error("Main Thread Dead, Joining it in the after life.")
                             sys.exit()
-                    self.current_progress = 0
 
                 # Try to add file to cache.
                 if not dep_cache_dir.exists():
@@ -477,9 +481,8 @@ class CurseDownloader:
                 shutil.copyfile(str(dep_cache_dir / file_name),
                                 str(mods_path / file_name))  # Rename from temp to correct file name.
 
-                current_files_dl += 1
-                self.total_progress = current_files_dl
-                log.debug("current_files_dl: " + str(current_files_dl))
+                self.current_progress += 1
+                log.debug("self.current_progress: " + str(self.current_progress))
 
                 # TODO: ADD: ERRED MOD DOWNLOADS DISPLAY
                 # if len(erred_mod_downloads) is not 0:
@@ -493,16 +496,15 @@ class CurseDownloader:
                 #     print("See log in manifest directory for list.\n!! WARNING !!\n")
                 #     erred_mod_downloads.clear()
 
-                self.isDone = True
                 # Catch any threaded exceptions, mark the thread as finished and the re-raise the exception.
                 # this allows calling thread to detect the thread has finished processing and can continue doing "stuff".
             except Exception as e:
-                self.isDone = True
+                self.is_done = True
                 raise e
-        self.isDone = True
         log.info("Finished Processing All Mods Listed In Manifest.")
         print("Unpacking Complete")
         sess.close()
+        self.is_done = True  # End of thread workload.
 
 
 def create_dir_if_not_exist(path):
@@ -522,3 +524,10 @@ def initialize_program_environment():
     # TODO: Program settings file. create if non-existing.
     # TODO: Add other steps that should be check at startup time.
     pass
+
+
+# If this script is being run then start. else if being accessed don't try and run the gui stuffs.
+if __name__ == '__main__':
+    # print("This is not an executable.")
+    pass
+

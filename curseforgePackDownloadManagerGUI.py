@@ -7,6 +7,7 @@ from downloader_core import *
 import json
 import os
 import threading
+import queue
 import time
 from pathlib import Path
 
@@ -73,7 +74,7 @@ class NewFromCurseUrl(Toplevel):
         self.grab_release()
         self.destroy()
 
-    def fetch_pack_from_url(self, event=None):
+    def fetch_pack_from_url(self, *_):
         self.lbl_feedback_info.config(text="")
         # project_identifier: get user input, remove left and right white space, replace any remaining internal spaces \
         # with dash/negative char, and convert any uppercase letters to lower, and finally store it in var.
@@ -161,170 +162,179 @@ class SelectUnpackDirectory(Toplevel):
         unzip(self.src_zip, mc_path)
         # manager.download_mods(mc_path)
         # TODO Implement mod downloading after url fetch and zip download.
-        workThread = threading.Thread(target=manager.download_mods, args=(mc_path,))
-        workThread.start()
+        work_thread = threading.Thread(target=manager.download_mods, args=(mc_path,))
+        work_thread.start()
         self.close_window()
-        while not manager.isDone:
+        while not manager.is_done:
             time.sleep(0.05)
-            if manager.fileSize is not None:
-                percent = round((manager.current_progress/manager.fileSize) * 100, 0)
-                print(str(percent) + " P: " + str(manager.current_progress) + "/" + str(manager.fileSize))
-        print("Done")
+            if manager.file_size:
+                percent = round((int(manager.current_progress) / int(manager.file_size)) * 100, 0)
+                print(str(percent) + " P: " + str(get_human_readable(manager.current_file_size)) + "/" + str(get_human_readable(manager.file_size)))
+            else:
+                print("unknown size. Currently downloaded: " + get_human_readable(manager.current_file_size))
+        print("work_thread: manager.downloads_mods 'isDone' detected.")
+        print("Manager Done Downloading")
 
 
 class VersionSelectionMenu(Toplevel):
-    def __init__(self, pack_version_lists=None):
-        Toplevel.__init__(self)
-        self.minsize(width=400, height=300)
-        self.maxsize(width=400, height=300)
-        self.resizable(FALSE, FALSE)
-        self.protocol("WM_DELETE_WINDOW", self.close_window)
-        self.title("Select Mod Pack Version")
-        center(self)
-        self.focus()
-        self.grab_set()
-        # --- Variables and stuff.
-        self.listbox_version_list = []
-        self.current_selection = 0
-        self.pack_version_lists = pack_version_lists
-        self.available_version_types = [False, False, False]  # Release, Beta, Alpha
-        if self.pack_version_lists is not None:
-            for versions in self.pack_version_lists[3]:
-                type_of_release = versions[0]
-                if versions[0] == "R":
-                    self.available_version_types[0] = True
-                    type_of_release = "Release"
-                elif versions[0] == "B":
-                    self.available_version_types[1] = True
-                    type_of_release = "Beta"
-                elif versions[0] == "A":
-                    self.available_version_types[2] = True
-                    type_of_release = "Alpha"
-                self.listbox_version_list.append(type_of_release + " - " + versions[2] + " (ID: " + versions[1] + ")")
+    def __init__(self, pack_info):
+        if pack_info:  # If list is not empty.
+            Toplevel.__init__(self)
+            self.minsize(width=400, height=300)
+            self.maxsize(width=400, height=300)
+            self.resizable(FALSE, FALSE)
+            self.protocol("WM_DELETE_WINDOW", self.close_window)
+            self.title("Select Mod Pack Version")
+            center(self)
+            self.focus()
+            self.grab_set()
+            # --- Variables and stuff.
+            self.pack_source = pack_info[0]
+            self.project_id = pack_info[1]
+            self.project_name = pack_info[2]
+            self.pack_version_list = pack_info[3]
+            self.available_version_types = [False, False, False]  # Release, Beta, Alpha
+            self.current_version_list = []
 
-        # --- GUI objects.
-        self.lbl_select_version = ttk.Label(self, text="Select the desired version of the pack to install.")
-        self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (self.pack_version_lists[1], self.pack_version_lists[2]))
-        self.lbl_combo_release_type = ttk.Label(self, text="Release Types: ")
-        self.combo_release_type = ttk.Combobox(self, state='readonly')
-        self.combo_release_type.bind("<<ComboboxSelected>>", self.combo_release_type_update)
-        # --- container object.
-        self.listbox_version_container = ttk.Frame(self)
-        self.listbox_version = Listbox(self.listbox_version_container, height=12)
-        self.listbox_version.bind('<<ListboxSelect>>', self.update_selected)
-        self.scroll_listbox_version = ttk.Scrollbar(self.listbox_version_container, command=self.listbox_version.yview)
-        # --- config container contents.
-        self.listbox_version.grid(column=0, row=0, sticky='NESW', columnspan=1)
-        self.listbox_version.focus()
-        self.scroll_listbox_version.grid(column=1, row=0, sticky='NESW', columnspan=1)
-        self.listbox_version['yscrollcommand'] = self.scroll_listbox_version.set
-        # ---
-        self.listbox_version_container.columnconfigure(0, weight=1)
-        self.listbox_version_container.columnconfigure(1, weight=0)
-        self.listbox_version_container.rowconfigure(0, weight=1)
-        # --- GUI objects.
-        self.button_submit = ttk.Button(self, text="Download Selected", command=self.download_selected_pack_version)
-        self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
-        # -- GUI grid config.
-        self.lbl_select_version.grid(column=0, row=0, sticky='N', columnspan=2)
-        self.lbl_project_id.grid(column=0, row=1, sticky='', columnspan=2)
-        self.lbl_combo_release_type.grid(column=0, row=2, sticky='E')
-        self.combo_release_type.grid(column=1, row=2, sticky='W')
-        self.listbox_version_container.grid(column=0, row=3, sticky='NESW', columnspan=2)
-        self.button_submit.grid(column=0, row=4, sticky='NESW')
-        self.button_cancel.grid(column=1, row=4, sticky='NESW')
+            # --- GUI objects.
+            self.lbl_select_version = ttk.Label(self, text="Select the desired version of the pack to install.")
+            self.lbl_project_id = ttk.Label(self, text="Project ID: %s\nProject Name: %s" % (self.project_id, self.project_name))
+            self.lbl_combo_release_type = ttk.Label(self, text="Release Types: ")
+            self.combo_release_type = ttk.Combobox(self, state='readonly')
+            self.combo_release_type.bind("<<ComboboxSelected>>", self.combo_release_type_update)
+            # --- container object.
+            self.listbox_version_container = ttk.Frame(self)
+            self.listbox_version = Listbox(self.listbox_version_container, height=12)
+            # FIXME: Remove the following line and self.update_selected method. No longer needed?
+            # self.listbox_version.bind('<<ListboxSelect>>', self.update_selected)
+            self.scroll_listbox_version = ttk.Scrollbar(self.listbox_version_container, command=self.listbox_version.yview)
+            # --- config container contents.
+            self.listbox_version.grid(column=0, row=0, sticky='NESW', columnspan=1)
+            self.listbox_version.focus()
+            self.scroll_listbox_version.grid(column=1, row=0, sticky='NESW', columnspan=1)
+            self.listbox_version['yscrollcommand'] = self.scroll_listbox_version.set
+            # ---
+            self.listbox_version_container.columnconfigure(0, weight=1)
+            self.listbox_version_container.columnconfigure(1, weight=0)
+            self.listbox_version_container.rowconfigure(0, weight=1)
+            # --- GUI objects.
+            self.button_submit = ttk.Button(self, text="Download Selected", command=self.download_selected_pack_version)
+            self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
+            # -- GUI grid config.
+            self.lbl_select_version.grid(column=0, row=0, sticky='N', columnspan=2)
+            self.lbl_project_id.grid(column=0, row=1, sticky='', columnspan=2)
+            self.lbl_combo_release_type.grid(column=0, row=2, sticky='E')
+            self.combo_release_type.grid(column=1, row=2, sticky='W')
+            self.listbox_version_container.grid(column=0, row=3, sticky='NESW', columnspan=2)
+            self.button_submit.grid(column=0, row=4, sticky='NESW')
+            self.button_cancel.grid(column=1, row=4, sticky='NESW')
 
-        for column_index in range(1+1):
-            self.columnconfigure(column_index, weight=1)
-        for row_index in range(4+1):
-            self.rowconfigure(row_index, weight=1)
+            for column_index in range(1+1):
+                self.columnconfigure(column_index, weight=1)
+            for row_index in range(4+1):
+                self.rowconfigure(row_index, weight=1)
 
-        if self.pack_version_lists is not None:
-            for version in self.listbox_version_list:
-                self.listbox_version.insert(END, version)
-            self.combo_release_type['values'] = ('All',)
-            self.combo_release_type.set('All',)
-            if self.available_version_types[0]:
-                self.combo_release_type['values'] = self.combo_release_type['values'] + ('Release',)
-            if self.available_version_types[1]:
-                self.combo_release_type['values'] = self.combo_release_type['values'] + ('Beta',)
-            if self.available_version_types[2]:
-                self.combo_release_type['values'] = self.combo_release_type['values'] + ('Alpha',)
+            # --- Logic
+            if self.pack_version_list:
+                for versions in self.pack_version_list:
+                    if versions[0] == "R":
+                        self.available_version_types[0] = True
+                    elif versions[0] == "B":
+                        self.available_version_types[1] = True
+                    elif versions[0] == "A":
+                        self.available_version_types[2] = True
 
-        else:
-            self.button_submit['state'] = DISABLED  # Something failed better not allow them to continue.
-        self.listbox_version.selection_set(0)
-        self.listbox_version.activate(0)
-        log.debug("Version Current Selection:")
-        log.debug(self.listbox_version_list)
-        log.debug(self.current_selection)
-        log.debug(self.listbox_version.curselection())
-        project_id = self.pack_version_lists[1]
-        project_name = self.pack_version_lists[2]
-        bare_pack_version_list = self.pack_version_lists[3]
+                self.combo_release_type['values'] = ('All',)
+                self.combo_release_type.set('All',)
+                if self.available_version_types[0]:
+                    self.combo_release_type['values'] = self.combo_release_type['values'] + ('Release',)
+                if self.available_version_types[1]:
+                    self.combo_release_type['values'] = self.combo_release_type['values'] + ('Beta',)
+                if self.available_version_types[2]:
+                    self.combo_release_type['values'] = self.combo_release_type['values'] + ('Alpha',)
+            else:
+                self.button_submit['state'] = DISABLED  # Something failed better not allow them to continue.
+
+            self.combo_release_type_update()
+        else:  # else if pack_info is empty
+            log.error("pack_info list is empty! This should not happen!")
 
     def combo_release_type_update(self, *_):
-        # TODO: actually update the list.
-        # TODO Implement Version Selection And Then Download Selected Version.
-        print("combo")
-        print(self.combo_release_type.get())
+        log.debug("combobox: " + str(self.combo_release_type.get()))
         display_list = []
+        self.current_version_list = []  # Reset list every time.
         list_only_these_versions = self.combo_release_type.get()
-        for listElement in self.pack_version_lists[3]:
+        for listElement in self.pack_version_list:
             if list_only_these_versions == "All":
-                display_list.append(listElement)
-                continue
+                self.current_version_list.append(listElement[1])
+                display_list.append(listElement[0] + ' - ' + listElement[1] + ' - ' + listElement[2])
 
-            if list_only_these_versions == "Release":
+            elif list_only_these_versions == "Release":
                 if listElement[0] == "R":
-                    display_list.append(listElement)
-                    continue
+                    self.current_version_list.append(listElement[1])
+                    display_list.append(listElement[0] + ' - ' + listElement[1] + ' - ' + listElement[2])
 
-            if list_only_these_versions == "Beta":
+            elif list_only_these_versions == "Beta":
                 if listElement[0] == "B":
-                    display_list.append(listElement)
-                    continue
+                    self.current_version_list.append(listElement[1])
+                    display_list.append(listElement[0] + ' - ' + listElement[1] + ' - ' + listElement[2])
 
-            if list_only_these_versions == "Alpha":
+            elif list_only_these_versions == "Alpha":
                 if listElement[0] == "A":
-                    display_list.append(listElement)
-                    continue
+                    self.current_version_list.append(listElement[1])
+                    display_list.append(listElement[0] + ' - ' + listElement[1] + ' - ' + listElement[2])
+
         self.listbox_version.delete(0, END)
         for listElement in display_list:
             self.listbox_version.insert(END, listElement)
+        self.listbox_version.selection_set(0)
+        self.listbox_version.activate(0)
+        log.debug("Version Current Selection: " + str(self.listbox_version.curselection()))
 
-
-
-    def update_selected(self, *args):
-        if self.listbox_version.curselection() == ():
-            self.current_selection = 0
-        else:
-            self.current_selection = self.listbox_version.curselection()[0]
-        print("Debug:")
-        print(self.current_selection)
-        print(self.listbox_version.curselection())
-        # print(self.listbox_version_list[self.current_selection])
-        # print(self.pack_version_lists[3][self.current_selection][1])
-        # pass
+    # FIXME: Remove this as it is no longer used??
+    # def update_selected(self, *_):
+    #     log.debug("Debug: current selection: " + str(self.listbox_version.curselection()[0]))
 
     def download_selected_pack_version(self):
         print("download_selected_pack_version")
-        self.update_selected()
-        print(self.listbox_version_list[self.current_selection])
-        print(self.current_selection)
-        print(self.pack_version_lists[2], self.pack_version_lists[3][self.current_selection][1])
+        print(self.project_name, self.current_version_list[self.listbox_version.curselection()[0]])
         # TODO: Ask for install directory, folder name.
         #   TODO: Check if already exists.
         #   TODO: Ask if you want to replace existing or cancel.
         # TODO: Unpack to selected directory.
         # TODO: Create pack setting/info file (update url, project id, curFileID aka version, etc)
 
-        src_zip = manager.download_modpack_zip(pack_source=self.pack_version_lists[0],
-                                               project_id=self.pack_version_lists[1],
-                                               project_name=self.pack_version_lists[2],
-                                               file_id=self.pack_version_lists[3][self.current_selection][1])
-        self.close_window()
-        SelectUnpackDirectory(src_zip)
+        src_zip = manager.download_modpack_zip(
+            pack_source=self.pack_source,
+            project_id=self.project_id,
+            project_name=self.project_name,
+            file_id=self.current_version_list[self.listbox_version.curselection()[0]])
+        print("work_thread: manager.download_modpack_zip 'isDone' detected.")
+        print("Manager Done Downloading")
+        if src_zip:
+            SelectUnpackDirectory(src_zip)
+        else:
+            log.error("src_zip returned nothing!")
+
+        # # TODO: Probably use ques to get threads working right.
+        # work_thread = threading.Thread(target=manager.download_modpack_zip, args=(
+            # pack_source=self.pack_source,
+            # project_id=self.project_id,
+            # project_name=self.project_name,
+            # file_id=self.current_version_list[3][self.listbox_version.curselection()[0]][1])
+        # work_thread.start()
+        # self.close_window()
+        # while not manager.is_done:
+        #     time.sleep(0.05)
+        #     if manager.file_size:
+        #         percent = round((int(manager.current_file_size) / int(manager.file_size)) * 100, 0)
+        #         print(str(percent) + " P: " + str(get_human_readable(manager.current_file_size)) + "/" + str(get_human_readable(manager.file_size)))
+        #     else:
+        #         print("unknown size. Currently downloaded: " + get_human_readable(manager.current_file_size))
+        # print("work_thread: manager.download_modpack_zip 'isDone' detected.")
+        # print("Manager Done Downloading")
+        # manager.reset_download_status()
+        # SelectUnpackDirectory(manager.return_arg)
 
     def close_window(self):
         self.grab_release()
