@@ -231,7 +231,7 @@ class CurseDownloader:
 
                 return [project_id, project_name, bare_pack_version_list]
             else:
-                return None
+                return []
 
     def download_modpack_zip(self, project_name, project_id, file_id, session_id=None):
         self.reset_download_status()
