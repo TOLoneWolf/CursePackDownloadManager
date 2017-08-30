@@ -165,14 +165,15 @@ class CurseDownloader:
     #         log.debug("Error: No Mod Pack Found At Provided Project Name/ID.")
     #         log.debug(latest.url)
 
-    # view-source:https://minecraft.curseforge.com/projects/project-ozone-2-reloaded/files
     def retrieve_pack_version_lists(self, project_identifier):
         """
         :param project_identifier: curseforge project name or numeric id.
         :return: List[project_id, project_name, version_list[0=type,1=id,2=title]]
         """
-        if project_identifier is None:
-            return []
+        # Example URL's to search.
+        # https://minecraft.curseforge.com/projects/project-ozone-2-reloaded/files
+        # https://www.feed-the-beast.com/projects/ftb-beyond/files
+
         if type(project_identifier) is str:
             # project_identifier: get user input, remove left and right white space,
             #  replace any remaining internal spaces with dash/negative char,
@@ -180,17 +181,26 @@ class CurseDownloader:
             project_identifier = project_identifier.strip().replace(" ", "-").lower()
             if project_identifier == "":
                 return []
-
+        else:
+            return []
+        log.debug("https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
         sess_response = self.sess.get(
             "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
-
         log.debug("status code: %d" % sess_response.status_code)
+        if sess_response.status_code == 404:  # If request found nothing, try ftb packs.
+            # Test if Feed-The-Beast Pack.
+            # https://www.feed-the-beast.com/projects/ftb-beyond/files
+            log.debug("https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
+            sess_response = self.sess.get(
+                "https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
+            log.debug("status code: %d" % sess_response.status_code)
+
         if sess_response.status_code == 200:
             # log.debug(len('https://minecraft.curseforge.com/projects/'), len('/files')) # should be: 42 6
-            project_name = sess_response.url[42:-6]
+            project_name = sess_response.url.split("/")[-2:-1][0]  # strip down to project name.
             content_list = str(sess_response.content)
             content_list = content_list.split("\\r\\n")
-            combine = False
+            combine_lines = False
             content_version_list = []
             build_version_element = []
             # bare_pack_version_list[<VersionType>, <FileID>, <VersionTitle>]
@@ -198,21 +208,22 @@ class CurseDownloader:
             mod_pack_url_true = False
             for line in content_list:
                 line = line.strip()
-                if line == "":
-                    continue  # Skips empty lines of text from the html returned.
-                elif line == '<a href="/modpacks">Modpacks</a>':
-                    mod_pack_url_true = True
-                    continue
-                elif line == '<tr class="project-file-list-item">':
-                    combine = True
-                elif line == "</tr>":
-                    if combine:
-                        build_version_element.append(line)
-                        content_version_list.append(build_version_element)
-                        build_version_element = []
-                        combine = False
-                if combine:
-                    build_version_element.append(line)
+                if mod_pack_url_true:  # Have we seen if it's modpack, before we look for versions in the next lines?
+                    if line == "":  # Skip empty lines sooner.
+                        pass
+                    elif line == '<tr class="project-file-list-item">':
+                        combine_lines = True
+                    elif line == "</tr>":
+                        if combine_lines:
+                            content_version_list.append(build_version_element)
+                            build_version_element = []
+                            combine_lines = False
+                    if not line == "":
+                        if combine_lines:
+                            build_version_element.append(line)
+                else:
+                    if line == '<a href="/modpacks">Modpacks</a>':
+                        mod_pack_url_true = True
 
             if mod_pack_url_true:
                 # print(len('<a class="overflow-tip twitch-link" href="/projects//files/'))  # len: 59
@@ -230,8 +241,10 @@ class CurseDownloader:
                             ['A', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
 
                 return [project_id, project_name, bare_pack_version_list]
-            else:
-                return []
+        return []
+
+
+
 
     def download_modpack_zip(self, project_name, project_id, file_id, session_id=None):
         self.reset_download_status()

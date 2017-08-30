@@ -79,12 +79,12 @@ class NewFromCurseUrl(Toplevel):
         # with dash/negative char, and convert any uppercase letters to lower, and finally store it in var.
         project_identifier = self.entry_mod_pack_name.get()
         pack_version_response = manager.retrieve_pack_version_lists(project_identifier)
-        if not pack_version_response:
-            self.lbl_feedback_info.config(text="Failed: Check ID / Name is correct and try again.")
-        else:
+        if pack_version_response:  # If version list has contents.
             self.lbl_feedback_info.config(text="")
             VersionSelectionMenu(pack_version_response)
             self.close_window()
+        else:
+            self.lbl_feedback_info.config(text="Failed: Check ID / Name is correct and try again.")
 
 
 class OpenPackZip:
