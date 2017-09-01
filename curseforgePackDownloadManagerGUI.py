@@ -474,6 +474,8 @@ if __name__ == '__main__':
     # ask = simpledialog.askstring("test", "yo")
     initialize_program_environment()
     manager = CurseDownloader()
+    # FIXME: Temp line to test. Remove this later.
+    instance_update_check(manager)
     print("Cached files are stored here:\n %s\n" % os.path.abspath(CACHE_PATH))
     RootWindow()
     manager.master_thread_running = False

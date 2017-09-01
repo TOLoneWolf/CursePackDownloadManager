@@ -11,6 +11,7 @@ import os.path
 import sys
 import json
 import logging
+import time
 
 '''
 Author(s): TOLoneWolf
@@ -36,7 +37,7 @@ program_config_settings = {'key1': 'value1',
 sess = requests.session()
 sess.headers.update({
     'User-Agent': requests.utils.default_user_agent() +
-    ' ' + PROGRAM_NAME + '/' + PROGRAM_VERSION_NUMBER})
+    ' ' + PROGRAM_NAME + '/' + PROGRAM_VERSION_NUMBER + '-' + PROGRAM_VERSION_BUILD})
 
 
 parser = argparse.ArgumentParser(description="Download Curse modpack mods")
@@ -46,7 +47,6 @@ args, unknown = parser.parse_known_args()
 
 if args.debug:
     log_level = "DEBUG"
-
 else:
     log_level = "WARNING"  # Default.
 
@@ -72,18 +72,46 @@ log.addHandler(consoleHandler)
 # # ---
 
 
-def load_settings():
-    with open(CONFIG_FILE, 'r') as file:
-        global program_config_settings
-        program_config_settings = json.load(file)
-
-    # # edit the data
-    # program_config_settings['key3'] = 'value3'
+def load_json_file(src_file):
+    with open(src_file, 'r') as file:
+        return json.load(file)
 
 
-def save_settings():
-    with open(CONFIG_FILE, 'w') as file:
-        json.dump(program_config_settings, file, indent=4, sort_keys=True)
+def save_json_file(json_configs, dst_file):
+    with open(dst_file, 'w') as file:
+        json.dump(json_configs, file, indent=4, sort_keys=True)
+
+
+def instance_update_check(cd_manager):
+    pack_instance_list = [(os.path.abspath(os.path.join("test4", "test.json")))]
+    # pack_instance_list.append(os.path.normpath(Path("test3", "test.json")))
+    print(pack_instance_list)
+    for instance_config in pack_instance_list:
+        instance_settings = load_json_file(instance_config)
+        if not instance_settings["instance_settings"]["update_check"]:
+            continue
+        request_results = cd_manager.get_modpack_version_list(instance_settings["instance_settings"]["project_name"])
+        # results <- [pack_source, project_id, project_name, bare_pack_version_list]
+        if int(request_results[3][0][1]) > int(instance_settings["instance_settings"]["version_id"]):
+            print("New Version")
+        elif int(request_results[3][0][1]) == int(instance_settings["instance_settings"]["version_id"]):
+            print("current version")
+        else:
+            print("idk how but you got a newer version then is available :)")
+        src_zip = cd_manager.download_modpack_zip(request_results[0], request_results[1], request_results[2], request_results[3][0][1])
+        dst_dir = os.path.dirname(os.path.dirname(instance_config))
+        dst_folder_name = os.path.basename(os.path.dirname(instance_config))
+        print(dst_dir)
+        print(dst_folder_name)
+        # if os.path.exists((dst_dir + "\\" + dst_folder_name + "\\minecraft\\mods")):
+        #     shutil.rmtree((dst_dir + "\\" + dst_folder_name + "\\minecraft\\mods"))
+        #     print("here mods")
+        # if os.path.exists((dst_dir + "\\" + dst_folder_name + "\\minecraft\\config")):
+        #     shutil.rmtree((dst_dir + "\\" + dst_folder_name + "\\minecraft\\config"))
+        #     print("here config")
+        # TODO: copy old manifest to safety for use in update comparision.
+        cd_manager.unpack_modpack_zip(src_zip, dst_folder_name, (dst_dir + "\\"))
+        cd_manager.download_mods(Path(dst_dir, dst_folder_name))
 
 
 def unzip(path_to_zip_file, dst_dir=None):
@@ -148,6 +176,27 @@ def get_human_readable(size, precision=2, requestz=-1):
     return str(round(size, precision)) + suffixes[suffix_index]
 
 
+def move_overwrite_dir(src, dest, ignore=None):
+    def _recursive_overwrite(src, dest, ignore=None):
+        if os.path.isdir(src):
+            if not os.path.isdir(dest):
+                os.makedirs(dest)
+            files = os.listdir(src)
+            if ignore is not None:
+                ignored = ignore(src, files)
+            else:
+                ignored = set()
+            for f in files:
+                if f not in ignored:
+                    _recursive_overwrite(os.path.join(src, f),
+                                        os.path.join(dest, f),
+                                        ignore)
+        else:
+            shutil.copyfile(src, dest)
+    _recursive_overwrite(src, dest, ignore)
+    shutil.rmtree(src)
+
+
 class CurseDownloader:
     def __init__(self):
         self.master_thread_running = True
@@ -183,7 +232,7 @@ class CurseDownloader:
     def get_modpack_version_list(self, project_identifier):
         """
         :param project_identifier: curseforge project name or numeric id.
-        :return: List[project_id, project_name, version_list[0=type,1=id,2=title]]
+        :return: List[project_id, project_name, version_list[0=type,1=id,2=title]] or [] if None.
         """
         # Example URL's to search.
         # https://minecraft.curseforge.com/projects/project-ozone-2-reloaded/files
@@ -263,6 +312,14 @@ class CurseDownloader:
         return []
 
     def download_modpack_zip(self, pack_source, project_id, project_name, file_id):
+        """
+        Downloads a specific modpack.zip and returns the file path to it in the cache directory.
+        :param pack_source: which site it comes from ['curseforge','ftb']
+        :param project_id: the numberic id for the modpack project '242493'
+        :param project_name: The text id/url name 'what-ever-my-name'
+        :param file_id: The id for the specific version requested. '2287097'
+        :return: MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+        """
         self.reset_download_status()
         log.info("download_modpack_zip\n" + "project_name: " + project_name + " file_id: " + file_id)
         #  Check cache for file first.
@@ -320,7 +377,9 @@ class CurseDownloader:
 
     def unpack_modpack_zip(self, src_dir, dst_folder_name, dst_dir):
         # FIXME: unpack.
+        print(src_dir, dst_dir+dst_folder_name)
         unzip(src_dir, dst_dir+dst_folder_name)
+        # TODO: create instance settings.
         pass
 
     def download_mods(self, working_dir):
@@ -329,6 +388,7 @@ class CurseDownloader:
         # file_id = "2349268"
         # working_dir = "D:/Users/User/Downloads/Minecraft/#-cursePackManifests/test/"
         manifest_path = Path(os.path.normpath(os.path.join(working_dir, "manifest.json")))
+        log.debug(str(manifest_path))
         manifest_text = manifest_path.open().read()
         manifest_text = manifest_text.replace('\r', '').replace('\n', '')
         manifest_json = json.loads(manifest_text)
@@ -358,9 +418,9 @@ class CurseDownloader:
             return None
 
         if override_path.exists():
-            if not minecraft_path.exists():
-                log.info("shutil.move: " + str(override_path) + str(minecraft_path))
-                shutil.move(str(override_path), str(minecraft_path))
+            log.info("shutil.move: " + str(override_path) + str(minecraft_path))
+            # shutil.move(str(override_path), str(minecraft_path))
+            move_overwrite_dir(str(override_path), str(minecraft_path))
         if not minecraft_path.exists():
             log.debug("mkdir: " + str(minecraft_path))
             minecraft_path.mkdir()
@@ -368,11 +428,8 @@ class CurseDownloader:
             log.debug("mkdir: " + str(mods_path))
             mods_path.mkdir()
 
-            self.current_progress = 1
         try:
             self.total_progress = len(manifest_json['files'])
-            if self.total_progress:
-                print("No Mods")
         except KeyError as e:
             log.warning('files: I got a KeyError - reason %s' % str(e))
             print('I got a KeyError - reason %s' % str(e))
@@ -384,8 +441,7 @@ class CurseDownloader:
         print("Cached files are stored here:\n %s\n" % os.path.abspath(CACHE_PATH))
         print("%d files to download" % self.total_progress)
 
-        self.current_progress = self.current_progress
-
+        self.current_progress = 1
         for dependency in manifest_json['files']:
             if self.master_thread_running is False:
                 log.error("Main Thread Dead, Joining it in the after life.")
