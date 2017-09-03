@@ -93,4 +93,6 @@ ENV/
 
 .idea/
 /curse_download_cache/
-/curseforgePDM.json
+/pdm_settings.json
+/pdm_installed_instances.json
+/pdm_log.log

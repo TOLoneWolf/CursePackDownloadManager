@@ -13,25 +13,19 @@ from pathlib import Path
 
 '''
 Author(s): TOLoneWolf
-License: in license.txt
 
 This contains the code used to make the GUI interface.
 '''
 
 
-
-instanceData = {}
-instanceListData = ["first", "second", "third", "forth", "sixth", "Seventh", "Eighth", "ninth"]
-
-
-def center(toplevel):
+def center_window(toplevel):
     toplevel.update_idletasks()
     w = toplevel.winfo_screenwidth()
     h = toplevel.winfo_screenheight()
     size = tuple(int(_) for _ in toplevel.geometry().split('-')[0].split('+')[0].split('x'))
-    x = w / 2 - size[0] / 2
-    y = h / 2 - size[1] / 2
-    toplevel.geometry("%dx%d+%d+%d" % (size[0], size[1], x, y))
+    x = int(w / 2 - size[0] / 2)
+    y = int(h / 2 - size[1] / 2)
+    toplevel.geometry("{0}x{1}+{2}+{3}".format(size[0], size[1], x, y))
 
 
 # ----------------------------------------------------------------
@@ -45,7 +39,7 @@ class NewFromCurseUrl(Toplevel):
         self.resizable(FALSE, FALSE)
         self.protocol("WM_DELETE_WINDOW", self.close_window)
         self.title("New From CurseForge URL")
-        center(self)
+        center_window(self)
         self.focus()
         self.grab_set()
         for column_index in range(2):
@@ -106,11 +100,7 @@ class OpenPackZip:
                 if os.path.exists(dst_dir):
                     log.info("Folder With That Name Already Exists.")
                 else:
-                    # FIXME dfsdfsdf
-                    # TODO unpack zip file.
                     unzip(file_path, dst_dir)
-                    # TODO process manifest.
-                    # TODO download mods.
 
 
 class SelectUnpackDirectory(Toplevel):
@@ -123,7 +113,7 @@ class SelectUnpackDirectory(Toplevel):
         self.resizable(FALSE, FALSE)
         self.protocol("MW_DELETE_WINDOW", self.close_window)
         self.title("Select Directory")
-        center(self)
+        center_window(self)
         self.focus()
         self.grab_set()
         for column_index in range(2+1):
@@ -154,14 +144,17 @@ class SelectUnpackDirectory(Toplevel):
     def browse_folder(self):
         path_dst_dir = filedialog.askdirectory(title="Select Destination Folder")
         if not path_dst_dir == "":
+            self.entry_directory.delete(0, END)
             self.entry_directory.insert(END, path_dst_dir)
 
     def process(self):
-        mc_path = str(self.entry_directory.get()) + "/" + str(self.entry_instance_name.get())
-        print(mc_path)
+        mc_path = os.path.join(self.entry_directory.get(), self.entry_instance_name.get())
+        log.debug("unpack process: " + str(mc_path))
         unzip(self.src_zip, mc_path)
-        # manager.download_mods(mc_path)
-        # TODO Implement mod downloading after url fetch and zip download.
+        if os.path.exists(mc_path.join("manifest.json")):
+            if not os.path.exists(mc_path.join(INSTANCE_SETTINGS_FOLDER)):
+                os.mkdir(mc_path.join(INSTANCE_SETTINGS_FOLDER))
+            shutil.copy(mc_path.join('manifest.json'), os.path.join(mc_path, INSTANCE_SETTINGS_FOLDER, "manifest.json"))
         work_thread = threading.Thread(target=manager.download_mods, args=(mc_path,))
         work_thread.start()
         self.close_window()
@@ -171,7 +164,7 @@ class SelectUnpackDirectory(Toplevel):
                 percent = round((int(manager.current_progress) / int(manager.file_size)) * 100, 0)
                 print(str(percent) + " P: " + str(get_human_readable(manager.current_file_size)) + "/" + str(get_human_readable(manager.file_size)))
             else:
-                print("unknown size. Currently downloaded: " + get_human_readable(manager.current_file_size))
+                pass
         print("work_thread: manager.downloads_mods 'isDone' detected.")
         print("Manager Done Downloading")
 
@@ -185,7 +178,7 @@ class VersionSelectionMenu(Toplevel):
             self.resizable(FALSE, FALSE)
             self.protocol("WM_DELETE_WINDOW", self.close_window)
             self.title("Select Mod Pack Version")
-            center(self)
+            center_window(self)
             self.focus()
             self.grab_set()
             # --- Variables and stuff.
@@ -335,6 +328,7 @@ class VersionSelectionMenu(Toplevel):
         # print("Manager Done Downloading")
         # manager.reset_download_status()
         # SelectUnpackDirectory(manager.return_arg)
+        self.close_window()
 
     def close_window(self):
         self.grab_release()
@@ -360,13 +354,11 @@ class NewInstanceWindow(Toplevel):
         self.resizable(FALSE, FALSE)
         self.protocol("WM_DELETE_WINDOW", self.close_window)
         self.title("New Instance")
-        center(self)
+        center_window(self)
         self.focus()
         self.grab_set()
-        self.columnconfigure(0, weight=1)
-        for row_index in range(5):
-            self.rowconfigure(row_index, weight=1)
 
+        # --- Layout
         button_new_from_url = ttk.Button(self, text="New From Curse URL", command=self.new_from_url)
         button_new_from_zip = ttk.Button(self, text="New From Curse Pack.zip", command=self.open_pack_zip)
         button_new_from_manifest = ttk.Button(self, text="New From Curse Manifest.json", command=self.pack_from_manifest)
@@ -378,6 +370,11 @@ class NewInstanceWindow(Toplevel):
         button_new_from_manifest.grid(column=0, row=2, sticky='NESW')
         button_new_from_existing_instance.grid(column=0, row=3, sticky='NESW')
         button_close_window.grid(column=0, row=4, sticky='NESW')
+
+        self.columnconfigure(0, weight=1)
+        for row_index in range(4 + 1):
+            self.rowconfigure(row_index, weight=1)
+        # --- Logic
 
     def close_window(self):
         self.grab_release()
@@ -415,7 +412,7 @@ class RootWindow(Tk):
         Tk.__init__(self)
         self.title(PROGRAM_NAME + ' v' + PROGRAM_VERSION_NUMBER + " " + PROGRAM_VERSION_BUILD)
         self.minsize(width=600, height=300)
-        center(self)
+        center_window(self)
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
@@ -424,7 +421,7 @@ class RootWindow(Tk):
         self.logWindow['yscrollcommand'] = self.logWindowScrollbar.set
         self.menu_buttons = ttk.Frame(self)
         self.button_create_new_instance = ttk.Button(self.menu_buttons, text="New Instance", command=NewInstanceWindow)
-        self.checkInstanceUpdate = ttk.Button(self.menu_buttons, text="Check For Instance Updates")
+        self.checkInstanceUpdate = ttk.Button(self.menu_buttons, text="Check For Instance Updates", command=self.check_instance_update)
         self.bEditInstance = ttk.Button(self.menu_buttons, text="Edit Instance", command=EditInstance)
         self.bProgramSettings = ttk.Button(self.menu_buttons, text="Program Settings", command=ProgramSettings)
         self.selfUpdateCheck = ttk.Button(self.menu_buttons, text="Self Update",
@@ -467,6 +464,9 @@ class RootWindow(Tk):
     def close_window(self):
         self.destroy()
 
+    def check_instance_update(self):
+        instance_update_check(manager)
+
 
 # If this script is being run then start. else if being accessed don't try and run the gui stuffs.
 if __name__ == '__main__':
@@ -475,7 +475,6 @@ if __name__ == '__main__':
     initialize_program_environment()
     manager = CurseDownloader()
     # FIXME: Temp line to test. Remove this later.
-    instance_update_check(manager)
     print("Cached files are stored here:\n %s\n" % os.path.abspath(CACHE_PATH))
     RootWindow()
     manager.master_thread_running = False
