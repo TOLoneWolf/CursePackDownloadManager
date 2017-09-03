@@ -8,7 +8,6 @@ import errno
 import requests
 import os
 import os.path
-# from os.path import join as Join
 import sys
 import json
 import logging
@@ -50,8 +49,8 @@ sess.headers.update({
 # --- Parse in arguments.
 parser = argparse.ArgumentParser(description="Download Curse modpack mods")
 parser.add_argument("--manifest", help="manifest.json file from unzipped pack")
-parser.add_argument("--debug", dest="debug", action="store_true", help="Run in debugger mode.")
-parser.add_argument("--verbose", action="store_true", help="Outputs standard operation messages to console.")
+parser.add_argument("--debug", action="store_true", dest="debug", help="Run in debugger mode.")
+parser.add_argument("--verbose", action="store_true", dest="verbose", help="Outputs standard operation messages to console.")
 args, unknown = parser.parse_known_args()
 
 if args.debug:
@@ -220,14 +219,14 @@ def unzip(path_to_zip_file, dst_dir=None):
         directory = os.path.dirname(file_path_norm)
         filename, extension = os.path.splitext(filename_and_ext)
         # extension = extension[1:]
-        dst_dir = os.path.join(directory, filename)
+        dst_dir = os.path.normpath(directory + "\\" + filename)
     log.debug("unzip\npath to zip: " + str(path_to_zip_file) + " dst_dir: " + str(dst_dir))
     with zipfile.ZipFile(path_to_zip_file, "r") as zip_ref:
         zip_ref.extractall(dst_dir)
 
 
 # def make_zipfile(output_filename, source_dir):
-#     relative_root = os.path.abspath(Path(source_dir, os.pardir))
+#     relative_root = os.path.abspath(os.path.join(source_dir, os.pardir))
 #     with zipfile.ZipFile(output_filename, "w", zipfile.ZIP_DEFLATED) as zipFile:
 #         for root, dirs, files in os.walk(source_dir):
 #             # add directory (needed for empty dirs)
@@ -277,8 +276,6 @@ class CurseDownloader:
         :ex: https://minecraft.curseforge.com/projects/project-ozone-2-reloaded/files
         :ex: https://www.feed-the-beast.com/projects/ftb-beyond/files
         """
-
-        log.debug("get_modpack_version_list")
         if type(project_identifier) is str:
             project_identifier = project_identifier.strip().replace(" ", "-").lower()
             if project_identifier == "":
@@ -328,7 +325,7 @@ class CurseDownloader:
                         mod_pack_url_true = True
 
             if mod_pack_url_true:
-                # log.debug(str(len('<a class="overflow-tip twitch-link" href="/projects//files/')))  # len: 59
+                # print(len('<a class="overflow-tip twitch-link" href="/projects//files/'))  # len: 59
                 fileid_start_pos = len(project_name) + 59
                 project_id = content_version_list[0][9][9:15]
                 for listElement in content_version_list:
@@ -355,18 +352,16 @@ class CurseDownloader:
         :return: MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
         """
         self.reset_download_status()
-        log.info(
-            "download_modpack_zip\n" +
-            "project_name: " + project_name + " file_id: " + file_id)
+        log.info("download_modpack_zip\n" + "project_name: " + project_name + " file_id: " + file_id)
         #  Check cache for file first.
-        dep_cache_dir = os.path.join(MODPACK_ZIP_CACHE, project_id, file_id)
-        if os.path.isdir(dep_cache_dir):
-            cache_file = [files for files in os.scandir(dep_cache_dir)]  # Create list with files from directory.
+        dep_cache_dir = Path(MODPACK_ZIP_CACHE + "/" + str(project_id) + "/" + str(file_id))
+        if dep_cache_dir.is_dir():
+            cache_file = [files for files in dep_cache_dir.iterdir()]  # Create list with files from directory.
             if len(cache_file) >= 1:  # if there is at least one file.
                 file_name = os.path.basename(os.path.normpath(cache_file[0]))  # copy name of first file to var.
-                log.debug(os.path.join(MODPACK_ZIP_CACHE, project_id, file_id, file_name))
+                log.debug(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
                 self.is_done = True
-                self.return_arg = os.path.join(MODPACK_ZIP_CACHE, project_id, file_id, file_name)
+                self.return_arg = MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
                 return self.return_arg
 
         if pack_source == "curseforge":
@@ -382,7 +377,7 @@ class CurseDownloader:
             self.return_arg = ''
             return self.return_arg  # Error detecting pack source url.
 
-        log.debug(str(request_file_response.url))
+        log.debug(request_file_response.url)
         if request_file_response.status_code == 200:
             file_url = Path(request_file_response.url)
             file_name = unquote(file_url.name).split('?')[0]
@@ -510,6 +505,7 @@ class CurseDownloader:
                     metabase = "https://cursemeta.dries007.net"
                     metaurl = "%s/%s/%s.json" % (metabase, dependency['projectID'], dependency['fileID'])
                     r = sess.get(metaurl)
+                    # TODO: catch 502 badgateway erros and continue with the rest of download?
                     r.raise_for_status()
                     main_json = r.json()
                     if "code" in main_json:
@@ -549,11 +545,11 @@ class CurseDownloader:
                     log.debug("dep_cache.mkdir: " + str(dep_cache_dir))
                     dep_cache_dir.mkdir(parents=True)
 
-                log.debug("shutil.move: src: " + os.path.join(CACHE_PATH, file_name) +
-                          " dst: " + os.path.join(dep_cache_dir, file_name))
+                log.debug("shutil.move: src: " + str(Path(CACHE_PATH) / file_name) +
+                          " dst: " + str(dep_cache_dir / file_name))
 
-                shutil.move(os.path.join(CACHE_PATH, file_name),
-                            os.path.join(dep_cache_dir, file_name))
+                shutil.move(str(Path(CACHE_PATH) / file_name),
+                            str(dep_cache_dir / file_name))
 
                 log.debug("shutil.copyfile: src: " + str(dep_cache_dir / file_name) +
                           " dst: " + str(dep_cache_dir / file_name))
@@ -563,7 +559,6 @@ class CurseDownloader:
 
                 self.current_progress += 1
                 log.debug("self.current_progress: " + str(self.current_progress))
-                print("self.current_progress: " + str(self.current_progress))
 
                 # TODO: ADD: ERRED MOD DOWNLOADS DISPLAY
                 # if len(erred_mod_downloads) is not 0:
@@ -583,21 +578,22 @@ class CurseDownloader:
                 self.is_done = True
                 raise e
         log.info("Finished Processing All Mods Listed In Manifest.")
-        print("Finished Download Process")
+        print("Unpacking Complete")
         sess.close()
         self.is_done = True  # End of thread workload.
-        return True
 
 
 def initialize_program_environment():
     log.debug("Curse PDM: Checking/Initializing program environment")
-    init_pdm_settings()
     create_dir_if_not_exist(MODPACK_ZIP_CACHE)
     create_dir_if_not_exist(MOD_CACHE)
     # TODO: Program settings file. create if non-existing.
     # TODO: Add other steps that should be check at startup time.
+    pass
 
 
-# if __name__ == '__main__':
-#     pass
+# If this script is being run then start. else if being accessed don't try and run the gui stuffs.
+if __name__ == '__main__':
+    # print("This is not an executable.")
+    pass
 

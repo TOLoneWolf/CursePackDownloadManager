@@ -159,9 +159,9 @@ class SelectUnpackDirectory(Toplevel):
         work_thread.start()
         self.close_window()
         while not manager.is_done:
-            time.sleep(0.05)
+            time.sleep(0.2)
             if manager.file_size:
-                percent = round((int(manager.current_progress) / int(manager.file_size)) * 100, 0)
+                percent = round((int(manager.current_file_size) / int(manager.file_size)) * 100, 0)
                 print(str(percent) + " P: " + str(get_human_readable(manager.current_file_size)) + "/" + str(get_human_readable(manager.file_size)))
             else:
                 pass
