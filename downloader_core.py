@@ -384,7 +384,7 @@ class CurseDownloader:
 
         log.debug(str(request_file_response.url))
         if request_file_response.status_code == 200:
-            file_url = request_file_response.url
+            file_url = Path(request_file_response.url)
             file_name = unquote(file_url.name).split('?')[0]
             self.file_size = int(request_file_response.headers.get('content-length', 0))
             if self.file_size:
