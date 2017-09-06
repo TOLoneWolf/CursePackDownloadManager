@@ -287,14 +287,14 @@ class CurseDownloader:
         sess_response = sess.get(
             "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
         pack_source = "curseforge"
-        log.debug("status code: %d" % sess_response.status_code)
+        log.debug("status code: {0}".format(sess_response.status_code))
 
         if sess_response.status_code == 404:
             log.debug("https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
             sess_response = sess.get(
                 "https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
             pack_source = "ftb"
-            log.debug("status code: %d" % sess_response.status_code)
+            log.debug("status code: {0}".format(sess_response.status_code))
 
         if sess_response.status_code == 200:
             project_name = sess_response.url.split("/")[-2:-1][0]  # strip down to project name.
