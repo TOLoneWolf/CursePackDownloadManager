@@ -33,14 +33,16 @@ MOD_CACHE = os.path.join(CACHE_PATH, "mods_cache")
 INSTANCE_SETTINGS_FOLDER = "pdm_instance"
 CONFIG_FILE = "pdm_settings.json"
 INSTALLED_INSTANCE_FILE = "pdm_installed_instances.json"
-# program_settings should get new values on load.
-program_settings = {
-            "self_update_check": True,
-            "on_start_check_instance_updates": True,
-            "self_update_check_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/master/.github/current_version.txt",
-            "update_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/releases",
-            "installed_instances": INSTALLED_INSTANCE_FILE
+# Defaults settings in case we want to reset to them later.
+DEFAULT_PROGRAM_SETTINGS = {
+    "self_update_check": True,
+    "on_start_check_instance_updates": True,
+    "update_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/releases",
+    "installed_instances": INSTALLED_INSTANCE_FILE,
+    "cache_path": CACHE_PATH
         }
+# program_settings should get new values on load if user changed them.
+program_settings = DEFAULT_PROGRAM_SETTINGS
 sess = requests.session()
 sess.headers.update({
     'User-Agent': requests.utils.default_user_agent() +
@@ -127,14 +129,7 @@ def init_pdm_settings():
     # TODO: Finish default configs, and laoding them.
     global program_settings
     if not os.path.exists(CONFIG_FILE):
-        config_defaults = {
-            "self_update_check": True,
-            "on_start_check_instance_updates": True,
-            "self_update_check_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/master/.github/current_version.txt",
-            "update_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/releases",
-            "installed_instances": INSTALLED_INSTANCE_FILE
-        }
-        save_json_file(config_defaults, CONFIG_FILE)
+        save_json_file(program_settings, CONFIG_FILE)
         log.debug("Default Program Config Created.")
     if os.path.exists(CONFIG_FILE):
         program_settings = load_json_file(CONFIG_FILE)
@@ -386,7 +381,9 @@ class CurseDownloader:
                 print(str(file_name + " (DL: " + get_human_readable(self.file_size) + ")"))
             else:
                 print(str(file_name + " (DL: " + "size: ?" + ")"))
-            with open(CACHE_PATH + '/modpack.zip.temp', 'wb') as f:
+
+            mocpack_part_path = os.path.join(CACHE_PATH, file_name + '.part')
+            with open(mocpack_part_path, 'wb') as f:
                 for chunk in request_file_response.iter_content(1024):
                     self.current_file_size += len(chunk)
                     f.write(chunk)
@@ -394,7 +391,7 @@ class CurseDownloader:
                         sys.exit()
 
             create_dir_if_not_exist(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id)
-            shutil.move(CACHE_PATH + '/modpack.zip.temp',
+            shutil.move(mocpack_part_path,
                         MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
         else:
             self.is_done = True
@@ -530,13 +527,15 @@ class CurseDownloader:
                     log.error("Main Thread Dead, Joining it in the after life.")
                     sys.exit()
                 self.current_file_size = 0
-                with open(str(Path(CACHE_PATH) / file_name), 'wb') as file_data:
+
+                mod_part_path = os.path.join(CACHE_PATH, file_name + '.part')
+                with open(mod_part_path, 'wb') as file_data:
                     for chunk in requested_file_sess.iter_content(chunk_size=1024):
                         self.current_file_size += len(chunk)
                         file_data.write(chunk)
                         if self.master_thread_running is False:
                             file_data.close()
-                            os.remove(str(Path(CACHE_PATH) / file_name))
+                            os.remove(mod_part_path)
                             log.error("Main Thread Dead, Joining it in the after life.")
                             sys.exit()
 
@@ -545,10 +544,10 @@ class CurseDownloader:
                     log.debug("dep_cache.mkdir: " + str(dep_cache_dir))
                     dep_cache_dir.mkdir(parents=True)
 
-                log.debug("shutil.move: src: " + str(Path(CACHE_PATH) / file_name) +
+                log.debug("shutil.move: src: " + str(mod_part_path) +
                           " dst: " + str(dep_cache_dir / file_name))
 
-                shutil.move(str(Path(CACHE_PATH) / file_name),
+                shutil.move(mod_part_path,
                             str(dep_cache_dir / file_name))
 
                 log.debug("shutil.copyfile: src: " + str(dep_cache_dir / file_name) +
