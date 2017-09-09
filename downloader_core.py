@@ -43,8 +43,8 @@ DEFAULT_PROGRAM_SETTINGS = {
         }
 # program_settings should get new values on load if user changed them.
 program_settings = DEFAULT_PROGRAM_SETTINGS
-sess = requests.session()
-sess.headers.update({
+req_sess = requests.session()
+req_sess.headers.update({
     'User-Agent': requests.utils.default_user_agent() +
     ' ' + PROGRAM_NAME + '/' + PROGRAM_VERSION_NUMBER + '-' + PROGRAM_VERSION_BUILD})
 
@@ -156,6 +156,29 @@ def get_human_readable(size, precision=2, requestz=-1):
     return str(round(size, precision)) + suffixes[suffix_index]
 
 
+class InstanceInfo:
+    source = ''
+    project_id = 0
+    project_name = ''
+    version_ids = []
+
+    master_thread_running = True
+    is_done = False
+    file_size = 0
+    current_file_size = 0
+    total_progress = 0
+    current_progress = 0
+    return_arg = ''
+
+    def reset(self):
+        self.is_done = False
+        self.file_size = 0
+        self.current_file_size = 0
+        self.total_progress = 0
+        self.current_progress = 0
+        self.return_arg = ''
+
+
 def instance_update_check(cd_manager):
     if os.path.exists(INSTALLED_INSTANCE_FILE):
         pack_instance_list = load_json_file(INSTALLED_INSTANCE_FILE)["instances"]
@@ -244,346 +267,335 @@ def copy_instance(existing_instance_dir, new_copy_dir, sym_links=True):
     shutil.copytree(src=existing_instance_dir, dst=new_copy_dir, symlinks=sym_links)
 
 
-class CurseDownloader:
-    def __init__(self):
-        self.master_thread_running = True
-        self.is_done = False
-        self.file_size = 0
-        self.current_file_size = 0
-        self.total_progress = 0
-        self.current_progress = 0
-        self.return_arg = ''  # if threaded this is the response.
+def get_modpack_version_list(project_identifier):
+    """
+    :param project_identifier: curseforge project name or numeric id.
+    :return: [project_id, project_name, version_list[0=type,1=id,2=title]] or [] if None.\n
 
-    def reset_download_status(self):
-        self.is_done = False
-        self.file_size = 0
-        self.current_file_size = 0
-        self.total_progress = 0
-        self.current_progress = 0
-        self.return_arg = ''
-
-    def get_modpack_version_list(self, project_identifier):
-        """
-        :param project_identifier: curseforge project name or numeric id.
-        :return: [project_id, project_name, version_list[0=type,1=id,2=title]] or [] if None.\n
-
-        Example URL's to search.\n
-        :ex: https://minecraft.curseforge.com/projects/project-ozone-2-reloaded/files
-        :ex: https://www.feed-the-beast.com/projects/ftb-beyond/files
-        """
-        if type(project_identifier) is str:
-            project_identifier = project_identifier.strip().replace(" ", "-").lower()
-            if project_identifier == "":
-                return []
-        else:
+    Example URL's to search.\n
+    :ex: https://minecraft.curseforge.com/projects/project-ozone-2-reloaded/files
+    :ex: https://www.feed-the-beast.com/projects/ftb-beyond/files
+    """
+    if type(project_identifier) is str:
+        project_identifier = project_identifier.strip().replace(" ", "-").lower()
+        if project_identifier == "":
             return []
-
-        log.debug("https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
-        sess_response = sess.get(
-            "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
-        pack_source = "curseforge"
-        log.debug("status code: {0}".format(sess_response.status_code))
-
-        if sess_response.status_code == 404:
-            log.debug("https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
-            sess_response = sess.get(
-                "https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
-            pack_source = "ftb"
-            log.debug("status code: {0}".format(sess_response.status_code))
-
-        if sess_response.status_code == 200:
-            project_name = sess_response.url.split("/")[-2:-1][0]  # strip down to project name.
-            content_list = str(sess_response.content)
-            content_list = content_list.split("\\r\\n")
-            combine_lines = False
-            content_version_list = []
-            build_version_element = []
-            bare_pack_version_list = []  # bare_pack_version_list[<VersionType>, <FileID>, <VersionTitle>]
-            mod_pack_url_true = False
-            for line in content_list:
-                line = line.strip()
-                if mod_pack_url_true:  # Have we seen if it's modpack, before we look for versions in the next lines?
-                    if line == "":  # Skip empty lines sooner.
-                        pass
-                    elif line == '<tr class="project-file-list-item">':
-                        combine_lines = True
-                    elif line == "</tr>":
-                        if combine_lines:
-                            content_version_list.append(build_version_element)
-                            build_version_element = []
-                            combine_lines = False
-                    if not line == "":
-                        if combine_lines:
-                            build_version_element.append(line)
-                else:
-                    if line == '<a href="/modpacks">Modpacks</a>':
-                        mod_pack_url_true = True
-
-            if mod_pack_url_true:
-                # print(len('<a class="overflow-tip twitch-link" href="/projects//files/'))  # len: 59
-                fileid_start_pos = len(project_name) + 59
-                project_id = content_version_list[0][9][9:15]
-                for listElement in content_version_list:
-                    if listElement[2] == '<div class="release-phase tip" title="Release"></div>':
-                        bare_pack_version_list.append(
-                            ['R', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
-                    elif listElement[2] == '<div class="beta-phase tip" title="Beta"></div>':
-                        bare_pack_version_list.append(
-                            ['B', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
-                    elif listElement[2] == '<div class="alpha-phase tip" title="Alpha"></div>':
-                        bare_pack_version_list.append(
-                            ['A', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
-
-                return [pack_source, project_id, project_name, bare_pack_version_list]
+    else:
         return []
 
-    def download_modpack_zip(self, pack_source, project_id, project_name, file_id):
-        """
-        Downloads a specific modpack.zip and returns the file path to it in the cache directory.
-        :param pack_source: which site it comes from ['curseforge','ftb']
-        :param project_id: the numberic id for the modpack project '242493'
-        :param project_name: The text id/url name 'what-ever-my-name'
-        :param file_id: The id for the specific version requested. '2287097'
-        :return: MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
-        """
-        self.reset_download_status()
-        log.info("download_modpack_zip\n" + "project_name: " + project_name + " file_id: " + file_id)
-        #  Check cache for file first.
-        dep_cache_dir = Path(MODPACK_ZIP_CACHE + "/" + str(project_id) + "/" + str(file_id))
-        if dep_cache_dir.is_dir():
-            cache_file = [files for files in dep_cache_dir.iterdir()]  # Create list with files from directory.
-            if len(cache_file) >= 1:  # if there is at least one file.
-                file_name = os.path.basename(os.path.normpath(cache_file[0]))  # copy name of first file to var.
-                log.debug(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
-                self.is_done = True
-                self.return_arg = MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
-                return self.return_arg
+    log.debug("https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
+    sess_response = req_sess.get(
+        "https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
+    pack_source = "curseforge"
+    log.debug("status code: {0}".format(sess_response.status_code))
 
-        if pack_source == "curseforge":
-            request_file_response = sess.get(
-                "https://minecraft.curseforge.com/projects/{0}/files/{1}/download".format(
-                    project_name, file_id), stream=True)
-        elif pack_source == "ftb":
-            request_file_response = sess.get(
-                "https://www.feed-the-beast.com/projects/{0}/files/{1}/download".format(
-                    project_name, file_id), stream=True)
-        else:
-            self.is_done = True
-            self.return_arg = ''
-            return self.return_arg  # Error detecting pack source url.
+    if sess_response.status_code == 404:
+        log.debug("https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
+        sess_response = req_sess.get(
+            "https://www.feed-the-beast.com/projects/" + project_identifier + "/files")
+        pack_source = "ftb"
+        log.debug("status code: {0}".format(sess_response.status_code))
 
-        log.debug(request_file_response.url)
-        if request_file_response.status_code == 200:
-            file_url = Path(request_file_response.url)
-            file_name = unquote(file_url.name).split('?')[0]
-            self.file_size = int(request_file_response.headers.get('content-length', 0))
-            if self.file_size:
-                print(str(file_name + " (DL: " + get_human_readable(self.file_size) + ")"))
+    if sess_response.status_code == 200:
+        project_name = sess_response.url.split("/")[-2:-1][0]  # strip down to project name.
+        content_list = str(sess_response.content)
+        content_list = content_list.split("\\r\\n")
+        combine_lines = False
+        content_version_list = []
+        build_version_element = []
+        bare_pack_version_list = []  # bare_pack_version_list[<VersionType>, <FileID>, <VersionTitle>]
+        mod_pack_url_true = False
+        for line in content_list:
+            line = line.strip()
+            if mod_pack_url_true:  # Have we seen if it's modpack, before we look for versions in the next lines?
+                if line == "":  # Skip empty lines sooner.
+                    pass
+                elif line == '<tr class="project-file-list-item">':
+                    combine_lines = True
+                elif line == "</tr>":
+                    if combine_lines:
+                        content_version_list.append(build_version_element)
+                        build_version_element = []
+                        combine_lines = False
+                if not line == "":
+                    if combine_lines:
+                        build_version_element.append(line)
             else:
-                print(str(file_name + " (DL: " + "size: ?" + ")"))
+                if line == '<a href="/modpacks">Modpacks</a>':
+                    mod_pack_url_true = True
 
-            mocpack_part_path = os.path.join(CACHE_PATH, file_name + '.part')
-            with open(mocpack_part_path, 'wb') as f:
-                for chunk in request_file_response.iter_content(1024):
-                    self.current_file_size += len(chunk)
-                    f.write(chunk)
-                    if self.master_thread_running is False:
-                        sys.exit()
+        if mod_pack_url_true:
+            # print(len('<a class="overflow-tip twitch-link" href="/projects//files/'))  # len: 59
+            fileid_start_pos = len(project_name) + 59
+            project_id = content_version_list[0][9][9:15]
+            for listElement in content_version_list:
+                if listElement[2] == '<div class="release-phase tip" title="Release"></div>':
+                    bare_pack_version_list.append(
+                        ['R', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
+                elif listElement[2] == '<div class="beta-phase tip" title="Beta"></div>':
+                    bare_pack_version_list.append(
+                        ['B', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
+                elif listElement[2] == '<div class="alpha-phase tip" title="Alpha"></div>':
+                    bare_pack_version_list.append(
+                        ['A', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
 
-            create_dir_if_not_exist(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id)
-            shutil.move(mocpack_part_path,
-                        MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
+            return [pack_source, project_id, project_name, bare_pack_version_list]
+    return []
+
+
+def download_modpack_zip(pack_source, project_id, project_name, file_id):
+    # TODO: remove project_name? curese seems to respond now to ids in the project url while requesting the download.
+    """
+    Downloads a specific modpack.zip and returns the file path to it in the cache directory.
+    :param pack_source: which site it comes from ['curseforge','ftb']
+    :param project_id: the numberic id for the modpack project '242493'
+    :param project_name: The text id/url name 'what-ever-my-name'
+    :param file_id: The id for the specific version requested. '2287097'
+    :return: MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+    """
+    InstanceInfo().reset()
+    log.info("download_modpack_zip\n" + "project_name: " + project_name + " file_id: " + file_id)
+    #  Check cache for file first.
+    dep_cache_dir = Path(MODPACK_ZIP_CACHE + "/" + str(project_id) + "/" + str(file_id))
+    if dep_cache_dir.is_dir():
+        cache_file = [files for files in dep_cache_dir.iterdir()]  # Create list with files from directory.
+        if len(cache_file) >= 1:  # if there is at least one file.
+            file_name = os.path.basename(os.path.normpath(cache_file[0]))  # copy name of first file to var.
+            log.debug(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
+            InstanceInfo.is_done = True
+            InstanceInfo.return_arg = MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+            return InstanceInfo.return_arg
+
+    if pack_source == "curseforge":
+        request_file_response = req_sess.get(
+            "https://minecraft.curseforge.com/projects/{0}/files/{1}/download".format(
+                project_id, file_id), stream=True)
+    elif pack_source == "ftb":
+        request_file_response = req_sess.get(
+            "https://www.feed-the-beast.com/projects/{0}/files/{1}/download".format(
+                project_id, file_id), stream=True)
+    else:
+        InstanceInfo.is_done = True
+        InstanceInfo.return_arg = ''
+        return InstanceInfo.return_arg  # Error detecting pack source url.
+
+    log.debug(request_file_response.url)
+    if request_file_response.status_code == 200:
+        file_url = Path(request_file_response.url)
+        file_name = unquote(file_url.name).split('?')[0]
+        InstanceInfo.file_size = int(request_file_response.headers.get('content-length', 0))
+        if InstanceInfo.file_size:
+            print(str(file_name + " (DL: " + get_human_readable(InstanceInfo.file_size) + ")"))
         else:
-            self.is_done = True
-            self.return_arg = ''
-            return self.return_arg
+            print(str(file_name + " (DL: " + "size: ?" + ")"))
 
-        self.is_done = True
-        self.return_arg = MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
-        return self.return_arg
+        mocpack_part_path = os.path.join(CACHE_PATH, file_name + '.part')
+        with open(mocpack_part_path, 'wb') as f:
+            for chunk in request_file_response.iter_content(1024):
+                InstanceInfo.current_file_size += len(chunk)
+                f.write(chunk)
+                if InstanceInfo.master_thread_running is False:
+                    sys.exit()
 
-    def unpack_modpack_zip(self, src_dir, dst_folder_name, dst_dir):
-        # FIXME: unpack.
-        print(src_dir, dst_dir+dst_folder_name)
-        unzip(src_dir, dst_dir+dst_folder_name)
-        # TODO: create instance settings.
-        pass
+        create_dir_if_not_exist(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id)
+        shutil.move(mocpack_part_path,
+                    MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
+    else:
+        InstanceInfo.is_done = True
+        InstanceInfo.return_arg = ''
+        return InstanceInfo.return_arg
 
-    def download_mods(self, instance_dir):
-        """
-        :param instance_dir: The minecraft directory that contains the curse manifest.json file.
-        :return: True on success, False on failure.
-        """
-        self.reset_download_status()
-        manifest_path = os.path.abspath(os.path.join(instance_dir, "manifest.json"))
-        log.debug(str(manifest_path))
-        manifest_json = load_json_file(manifest_path)
+    InstanceInfo.is_done = True
+    InstanceInfo.return_arg = MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+    return InstanceInfo.return_arg
 
-        if 'manifestType' not in manifest_json or not manifest_json['manifestType'] == 'minecraftModpack':
-            log.error('Manifest missing manifestType key entry.')
-            self.is_done = True
-            return False
-        elif 'manifestVersion' not in manifest_json or not manifest_json['manifestVersion'] == 1:
-            log.error('Manifest missing manifestVersion key entry.')
-            self.is_done = True
-            return False
-        elif 'overrides' not in manifest_json:
-            log.error('Manifest missing overrides key entry.')
-            self.is_done = True
-            return False
-        elif 'files' not in manifest_json:
-            log.error('Manifest missing files key entries.')
-            self.is_done = True
-            return False
 
-        override_path = Path(instance_dir, manifest_json['overrides'])
-        minecraft_path = Path(instance_dir, "minecraft")
-        mods_path = Path(minecraft_path, "mods")
+def unpack_modpack_zip(src_dir, dst_folder_name, dst_dir):
+    # FIXME: unpack.
+    print(src_dir, dst_dir+dst_folder_name)
+    unzip(src_dir, dst_dir+dst_folder_name)
+    # TODO: create instance settings.
+    pass
 
-        if override_path.exists():
-            log.info("shutil.move: " + str(override_path) + str(minecraft_path))
-            move_overwrite_dir(str(override_path), str(minecraft_path))
-        if not minecraft_path.exists():
-            log.debug("mkdir: " + str(minecraft_path))
-            minecraft_path.mkdir()
-        if not mods_path.exists():
-            log.debug("mkdir: " + str(mods_path))
-            mods_path.mkdir()
 
-        self.total_progress = len(manifest_json['files'])
+def download_mods(instance_dir):
+    """
+    :param instance_dir: The minecraft directory that contains the curse manifest.json file.
+    :return: True on success, False on failure.
+    """
+    InstanceInfo().reset()
+    manifest_path = os.path.abspath(os.path.join(instance_dir, "manifest.json"))
+    log.debug(str(manifest_path))
+    manifest_json = load_json_file(manifest_path)
 
-        log.info("Cached files are stored here:\n {0}\n".format(os.path.abspath(CACHE_PATH)))
-        log.info("{0} files to download".format(self.total_progress))
-        print("Cached files are stored here:\n {0}\n".format(os.path.abspath(CACHE_PATH)))
-        print("{0} files to download".format(self.total_progress))
+    if 'manifestType' not in manifest_json or not manifest_json['manifestType'] == 'minecraftModpack':
+        log.error('Manifest missing manifestType key entry.')
+        InstanceInfo.is_done = True
+        return False
+    elif 'manifestVersion' not in manifest_json or not manifest_json['manifestVersion'] == 1:
+        log.error('Manifest missing manifestVersion key entry.')
+        InstanceInfo.is_done = True
+        return False
+    elif 'overrides' not in manifest_json:
+        log.error('Manifest missing overrides key entry.')
+        InstanceInfo.is_done = True
+        return False
+    elif 'files' not in manifest_json:
+        log.error('Manifest missing files key entries.')
+        InstanceInfo.is_done = True
+        return False
 
-        self.current_progress = 1
-        for dependency in manifest_json['files']:
-            if self.master_thread_running is False:
+    override_path = Path(instance_dir, manifest_json['overrides'])
+    minecraft_path = Path(instance_dir, "minecraft")
+    mods_path = Path(minecraft_path, "mods")
+
+    if override_path.exists():
+        log.info("shutil.move: " + str(override_path) + str(minecraft_path))
+        move_overwrite_dir(str(override_path), str(minecraft_path))
+    if not minecraft_path.exists():
+        log.debug("mkdir: " + str(minecraft_path))
+        minecraft_path.mkdir()
+    if not mods_path.exists():
+        log.debug("mkdir: " + str(mods_path))
+        mods_path.mkdir()
+
+    InstanceInfo.total_progress = len(manifest_json['files'])
+
+    log.info("Cached files are stored here:\n {0}\n".format(os.path.abspath(CACHE_PATH)))
+    log.info("{0} files to download".format(InstanceInfo.total_progress))
+    print("Cached files are stored here:\n {0}\n".format(os.path.abspath(CACHE_PATH)))
+    print("{0} files to download".format(InstanceInfo.total_progress))
+
+    # TODO: Split downloading into 2 parts.
+    # 1st processes the manifest.
+    # 2nd part does the downloading.
+    # this allows editing the manifest contents passed to the download, making merging and removing in memory
+    # instead of doing it directory in the original manifest. This should help with update portion.
+    InstanceInfo.current_progress = 1
+    for dependency in manifest_json['files']:
+        if InstanceInfo.master_thread_running is False:
+            log.error("Main Thread Dead, Joining it in the after life.")
+            sys.exit()
+        dep_cache_dir = Path(str(MOD_CACHE) + "/" + str(dependency['projectID']) + "/" + str(dependency['fileID']))
+        if dep_cache_dir.is_dir():
+            # File is cached
+            dep_files = [f for f in dep_cache_dir.iterdir()]
+            if len(dep_files) >= 1:
+                dep_file = dep_files[0]
+                target_file = minecraft_path / "mods" / dep_file.name
+                shutil.copyfile(str(dep_file), str(target_file))
+                print("[%d/%d] %s (in cache)" % (InstanceInfo.current_progress, InstanceInfo.total_progress, target_file.name))
+
+                InstanceInfo.current_progress += 1
+
+                # Cache access is successful,
+                # Don't download the file
+                continue
+
+        # File is not cached and needs to be downloaded
+        try:
+            file_response = req_sess.get(
+                "http://minecraft.curseforge.com/projects/{0}/files/{1}/download".format(
+                    dependency['projectID'], dependency['fileID']), stream=True)
+            requested_file_sess = req_sess.get(file_response.url, stream=True)
+
+            remote_url = Path(requested_file_sess.url)
+            file_name = unquote(remote_url.name).split('?')[0]  # If query data strip it and return just the file name.
+
+            log.debug(str(requested_file_sess.status_code))
+            log.debug(str(requested_file_sess.headers['content-type']))
+
+            if (requested_file_sess.status_code == 404) or (file_name == "download"):
+                print(str("[%d/%d] " + "Trying to resolve using alternate requesting.") % (InstanceInfo.current_progress, InstanceInfo.total_progress))
+
+                # If curse website fails to provide correct url try Dries API list.
+                # get the json from Dries:
+                metabase = "https://cursemeta.dries007.net"
+                metaurl = "%s/%s/%s.json" % (metabase, dependency['projectID'], dependency['fileID'])
+                r = req_sess.get(metaurl)
+                # TODO: catch 502 badgateway erros and continue with the rest of download?
+                r.raise_for_status()
+                main_json = r.json()
+                if "code" in main_json:
+                    print(str("[%d/%d] " + "ERROR FILE MISSING FROM SOURCE") % (InstanceInfo.current_progress, InstanceInfo.total_progress))
+                    # TODO: READD: erred_mod_downloads.append(metaurl.url)
+                    InstanceInfo.current_progress += 1
+                    continue
+                fileurl = main_json["DownloadURL"]
+                file_name = main_json["FileNameOnDisk"]
+                requested_file_sess = req_sess.get(fileurl, stream=True)
+
+            InstanceInfo.file_size = int(requested_file_sess.headers.get('content-length', 0))
+            if InstanceInfo.file_size:
+                print(
+                    str("[{0}/{1}] " + file_name + " (DL: " + get_human_readable(InstanceInfo.file_size) + ")").format(
+                        InstanceInfo.current_progress, InstanceInfo.total_progress))
+            else:
+                print(str("[%d/%d] " + "MISSING FILE SIZE") % (InstanceInfo.current_progress, InstanceInfo.total_progress))
+                InstanceInfo.file_size = 100
+
+            if InstanceInfo.master_thread_running is False:
                 log.error("Main Thread Dead, Joining it in the after life.")
                 sys.exit()
-            dep_cache_dir = Path(str(MOD_CACHE) + "/" + str(dependency['projectID']) + "/" + str(dependency['fileID']))
-            if dep_cache_dir.is_dir():
-                # File is cached
-                dep_files = [f for f in dep_cache_dir.iterdir()]
-                if len(dep_files) >= 1:
-                    dep_file = dep_files[0]
-                    target_file = minecraft_path / "mods" / dep_file.name
-                    shutil.copyfile(str(dep_file), str(target_file))
-                    print("[%d/%d] %s (in cache)" % (self.current_progress, self.total_progress, target_file.name))
+            InstanceInfo.current_file_size = 0
 
-                    self.current_progress += 1
+            mod_part_path = os.path.join(CACHE_PATH, file_name + '.part')
+            with open(mod_part_path, 'wb') as file_data:
+                for chunk in requested_file_sess.iter_content(chunk_size=1024):
+                    InstanceInfo.current_file_size += len(chunk)
+                    file_data.write(chunk)
+                    if InstanceInfo.master_thread_running is False:
+                        file_data.close()
+                        os.remove(mod_part_path)
+                        log.error("Main Thread Dead, Joining it in the after life.")
+                        sys.exit()
 
-                    # Cache access is successful,
-                    # Don't download the file
-                    continue
+            # Try to add file to cache.
+            if not dep_cache_dir.exists():
+                log.debug("dep_cache.mkdir: " + str(dep_cache_dir))
+                dep_cache_dir.mkdir(parents=True)
 
-            # File is not cached and needs to be downloaded
-            try:
-                project_response = sess.get(
-                    "http://minecraft.curseforge.com/projects/{0}".format(
-                        dependency['projectID']), stream=True)
-                file_response = sess.get(
-                    "{0}/files/{1}/download".format(
-                        project_response.url, dependency['fileID']), stream=True)
-                requested_file_sess = sess.get(file_response.url, stream=True)
+            log.debug("shutil.move: src: " + str(mod_part_path) +
+                      " dst: " + str(dep_cache_dir / file_name))
 
-                remote_url = Path(requested_file_sess.url)
-                file_name = unquote(remote_url.name).split('?')[0]  # If query data strip it and return just the file name.
+            shutil.move(mod_part_path,
+                        str(dep_cache_dir / file_name))
 
-                log.debug(str(requested_file_sess.status_code))
-                log.debug(str(requested_file_sess.headers['content-type']))
+            log.debug("shutil.copyfile: src: " + str(dep_cache_dir / file_name) +
+                      " dst: " + str(dep_cache_dir / file_name))
 
-                if (requested_file_sess.status_code == 404) or (file_name == "download"):
-                    print(str("[%d/%d] " + "Trying to resolve using alternate requesting.") % (self.current_progress, self.total_progress))
+            shutil.copyfile(str(dep_cache_dir / file_name),
+                            str(mods_path / file_name))  # Rename from temp to correct file name.
 
-                    # If curse website fails to provide correct url try Dries API list.
-                    # get the json from Dries:
-                    metabase = "https://cursemeta.dries007.net"
-                    metaurl = "%s/%s/%s.json" % (metabase, dependency['projectID'], dependency['fileID'])
-                    r = sess.get(metaurl)
-                    # TODO: catch 502 badgateway erros and continue with the rest of download?
-                    r.raise_for_status()
-                    main_json = r.json()
-                    if "code" in main_json:
-                        print(str("[%d/%d] " + "ERROR FILE MISSING FROM SOURCE") % (self.current_progress, self.total_progress))
-                        # TODO: READD: erred_mod_downloads.append(metaurl.url)
-                        self.current_progress += 1
-                        continue
-                    fileurl = main_json["DownloadURL"]
-                    file_name = main_json["FileNameOnDisk"]
-                    requested_file_sess = sess.get(fileurl, stream=True)
+            InstanceInfo.current_progress += 1
+            log.debug("InstanceInfo.current_progress: " + str(InstanceInfo.current_progress))
 
-                self.file_size = int(requested_file_sess.headers.get('content-length', 0))
-                if self.file_size:
-                    print(
-                        str("[{0}/{1}] " + file_name + " (DL: " + get_human_readable(self.file_size) + ")").format(
-                            self.current_progress, self.total_progress))
-                else:
-                    print(str("[%d/%d] " + "MISSING FILE SIZE") % (self.current_progress, self.total_progress))
-                    self.file_size = 100
+            # TODO: ADD: ERRED MOD DOWNLOADS DISPLAY
+            # if len(erred_mod_downloads) is not 0:
+            #     print("\n!! WARNING !!\nThe following mod downloads failed.")
+            #     for index in erred_mod_downloads:
+            #         print("- " + index)
+            #     # Create log of failed download links to pack manifest directory for user to inspect manually.
+            #     log_file = open(str(target_dir_path / "cursePackDownloaderModErrors.log"), 'w')
+            #     log_file.write("\n".join(str(elem) for elem in erred_mod_downloads))
+            #     log_file.close()
+            #     print("See log in manifest directory for list.\n!! WARNING !!\n")
+            #     erred_mod_downloads.clear()
 
-                if self.master_thread_running is False:
-                    log.error("Main Thread Dead, Joining it in the after life.")
-                    sys.exit()
-                self.current_file_size = 0
-
-                mod_part_path = os.path.join(CACHE_PATH, file_name + '.part')
-                with open(mod_part_path, 'wb') as file_data:
-                    for chunk in requested_file_sess.iter_content(chunk_size=1024):
-                        self.current_file_size += len(chunk)
-                        file_data.write(chunk)
-                        if self.master_thread_running is False:
-                            file_data.close()
-                            os.remove(mod_part_path)
-                            log.error("Main Thread Dead, Joining it in the after life.")
-                            sys.exit()
-
-                # Try to add file to cache.
-                if not dep_cache_dir.exists():
-                    log.debug("dep_cache.mkdir: " + str(dep_cache_dir))
-                    dep_cache_dir.mkdir(parents=True)
-
-                log.debug("shutil.move: src: " + str(mod_part_path) +
-                          " dst: " + str(dep_cache_dir / file_name))
-
-                shutil.move(mod_part_path,
-                            str(dep_cache_dir / file_name))
-
-                log.debug("shutil.copyfile: src: " + str(dep_cache_dir / file_name) +
-                          " dst: " + str(dep_cache_dir / file_name))
-
-                shutil.copyfile(str(dep_cache_dir / file_name),
-                                str(mods_path / file_name))  # Rename from temp to correct file name.
-
-                self.current_progress += 1
-                log.debug("self.current_progress: " + str(self.current_progress))
-
-                # TODO: ADD: ERRED MOD DOWNLOADS DISPLAY
-                # if len(erred_mod_downloads) is not 0:
-                #     print("\n!! WARNING !!\nThe following mod downloads failed.")
-                #     for index in erred_mod_downloads:
-                #         print("- " + index)
-                #     # Create log of failed download links to pack manifest directory for user to inspect manually.
-                #     log_file = open(str(target_dir_path / "cursePackDownloaderModErrors.log"), 'w')
-                #     log_file.write("\n".join(str(elem) for elem in erred_mod_downloads))
-                #     log_file.close()
-                #     print("See log in manifest directory for list.\n!! WARNING !!\n")
-                #     erred_mod_downloads.clear()
-
-                # Catch any threaded exceptions, mark the thread as finished and the re-raise the exception.
-                # this allows calling thread to detect the thread has finished processing and can continue doing "stuff".
-            except Exception as e:
-                self.is_done = True
-                raise e
-        log.info("Finished Processing All Mods Listed In Manifest.")
-        print("Unpacking Complete")
-        sess.close()
-        self.is_done = True  # End of thread workload.
+            # Catch any threaded exceptions, mark the thread as finished and the re-raise the exception.
+            # this allows calling thread to detect the thread has finished processing and can continue doing "stuff".
+        except Exception as e:
+            InstanceInfo.is_done = True
+            raise e
+    log.info("Finished Processing All Mods Listed In Manifest.")
+    print("Unpacking Complete")
+    req_sess.close()
+    InstanceInfo.is_done = True  # End of thread workload.
 
 
 def initialize_program_environment():
     log.debug("Curse PDM: Checking/Initializing program environment")
+    init_pdm_settings()
     create_dir_if_not_exist(MODPACK_ZIP_CACHE)
     create_dir_if_not_exist(MOD_CACHE)
     # TODO: Program settings file. create if non-existing.

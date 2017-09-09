@@ -73,7 +73,7 @@ class NewFromCurseUrl(Toplevel):
         # project_identifier: get user input, remove left and right white space, replace any remaining internal spaces \
         # with dash/negative char, and convert any uppercase letters to lower, and finally store it in var.
         project_identifier = self.entry_mod_pack_name.get()
-        pack_version_response = manager.get_modpack_version_list(project_identifier)
+        pack_version_response = get_modpack_version_list(project_identifier)
         if pack_version_response:  # If version list has contents.
             self.lbl_feedback_info.config(text="")
             VersionSelectionMenu(pack_version_response)
@@ -155,14 +155,14 @@ class SelectUnpackDirectory(Toplevel):
             if not os.path.exists(mc_path.join(INSTANCE_SETTINGS_FOLDER)):
                 os.mkdir(mc_path.join(INSTANCE_SETTINGS_FOLDER))
             shutil.copy(mc_path.join('manifest.json'), os.path.join(mc_path, INSTANCE_SETTINGS_FOLDER, "manifest.json"))
-        work_thread = threading.Thread(target=manager.download_mods, args=(mc_path,))
+        work_thread = threading.Thread(target=download_mods, args=(mc_path,))
         work_thread.start()
         self.close_window()
-        while not manager.is_done:
+        while not InstanceInfo.is_done:
             time.sleep(0.2)
-            if manager.file_size:
-                percent = round((int(manager.current_file_size) / int(manager.file_size)) * 100, 0)
-                print(str(percent) + " P: " + str(get_human_readable(manager.current_file_size)) + "/" + str(get_human_readable(manager.file_size)))
+            if InstanceInfo.file_size:
+                percent = round((int(InstanceInfo.current_file_size) / int(InstanceInfo.file_size)) * 100, 0)
+                print(str(percent) + " P: " + str(get_human_readable(InstanceInfo.current_file_size)) + "/" + str(get_human_readable(InstanceInfo.file_size)))
             else:
                 pass
         print("work_thread: manager.downloads_mods 'isDone' detected.")
@@ -297,7 +297,7 @@ class VersionSelectionMenu(Toplevel):
         # TODO: Unpack to selected directory.
         # TODO: Create pack setting/info file (update url, project id, curFileID aka version, etc)
 
-        src_zip = manager.download_modpack_zip(
+        src_zip = download_modpack_zip(
             pack_source=self.pack_source,
             project_id=self.project_id,
             project_name=self.project_name,
@@ -465,7 +465,7 @@ class RootWindow(Tk):
         self.destroy()
 
     def check_instance_update(self):
-        instance_update_check(manager)
+        instance_update_check()
 
 
 # If this script is being run then start. else if being accessed don't try and run the gui stuffs.
@@ -473,8 +473,7 @@ if __name__ == '__main__':
     # needs to be inside a Tk() master window to display the askstring.
     # ask = simpledialog.askstring("test", "yo")
     initialize_program_environment()
-    manager = CurseDownloader()
     # FIXME: Temp line to test. Remove this later.
     print("Cached files are stored here:\n %s\n" % os.path.abspath(CACHE_PATH))
     RootWindow()
-    manager.master_thread_running = False
+    InstanceInfo.master_thread_running = False
