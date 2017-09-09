@@ -94,8 +94,8 @@ def save_json_file(json_configs, dst_file):
         json.dump(json_configs, file, indent=4, sort_keys=True)
 
 
-def move_overwrite_dir(src, dest, ignore=None):
-    def _recursive_overwrite(src, dest, ignore=None):
+def move_overwrite_dir(m_src, m_dest, m_ignore=None):
+    def _recursive_overwrite(src, dest, ignore):
         if os.path.isdir(src):
             if not os.path.isdir(dest):
                 os.makedirs(dest)
@@ -106,13 +106,14 @@ def move_overwrite_dir(src, dest, ignore=None):
                 ignored = set()
             for f in files:
                 if f not in ignored:
-                    _recursive_overwrite(os.path.join(src, f),
-                                        os.path.join(dest, f),
-                                        ignore)
+                    _recursive_overwrite(
+                        os.path.join(src, f),
+                        os.path.join(dest, f),
+                        ignore)
         else:
             shutil.copyfile(src, dest)
-    _recursive_overwrite(src, dest, ignore)
-    shutil.rmtree(src)
+    _recursive_overwrite(m_src, m_dest, m_ignore)
+    shutil.rmtree(m_src)
 
 
 def create_dir_if_not_exist(path):
@@ -126,7 +127,7 @@ def create_dir_if_not_exist(path):
 
 
 def init_pdm_settings():
-    # TODO: Finish default configs, and laoding them.
+    # TODO: Finish default configs, and loading them.
     global program_settings
     if not os.path.exists(CONFIG_FILE):
         save_json_file(program_settings, CONFIG_FILE)
@@ -179,7 +180,7 @@ class InstanceInfo:
         self.return_arg = ''
 
 
-def instance_update_check(cd_manager):
+def instance_update_check():
     if os.path.exists(INSTALLED_INSTANCE_FILE):
         pack_instance_list = load_json_file(INSTALLED_INSTANCE_FILE)["instances"]
         log.debug(str(INSTALLED_INSTANCE_FILE))
@@ -192,7 +193,7 @@ def instance_update_check(cd_manager):
                 instance_settings = load_json_file(instance_config)
                 if not instance_settings["instance_settings"]["update_check"]:
                     continue
-                request_results = cd_manager.get_modpack_version_list(instance_settings["instance_settings"]["project_name"])
+                request_results = get_modpack_version_list(instance_settings["instance_settings"]["project_name"])
                 # results <- [pack_source, project_id, project_name, bare_pack_version_list]
                 log.debug(
                     "Local Version: " + str(instance_settings["instance_settings"]["version_id"]) +
@@ -204,13 +205,13 @@ def instance_update_check(cd_manager):
                     if instance_settings["instance_settings"]["update_automatic"]:
                         dst_dir = os.path.dirname(os.path.dirname(instance_config))
                         dst_folder_name = os.path.basename(os.path.dirname(instance_config))
-                        src_zip = cd_manager.download_modpack_zip(request_results[0], request_results[1],
+                        src_zip = download_modpack_zip(request_results[0], request_results[1],
                                                                   request_results[2],
                                                                   request_results[3][0][1])
 
                         # TODO: copy old manifest to safety for use in update comparision.
-                        cd_manager.unpack_modpack_zip(src_zip, dst_folder_name, (dst_dir + "\\"))
-                        cd_manager.download_mods(os.path.join(dst_dir, dst_folder_name))
+                        unpack_modpack_zip(src_zip, dst_folder_name, (dst_dir + "\\"))
+                        download_mods(os.path.join(dst_dir, dst_folder_name))
                         instance_settings["instance_settings"]["version_id"] = request_results[3][0][1]  # update version id.
                         save_json_file(instance_settings, instance_config)
                 else:
@@ -416,6 +417,33 @@ def unpack_modpack_zip(src_dir, dst_folder_name, dst_dir):
     unzip(src_dir, dst_dir+dst_folder_name)
     # TODO: create instance settings.
     pass
+
+# TODO: Create, save, and load instance settings.
+# def instance_settings(pack_dir):
+#     if os.path.exists(pack_dir + '\\pdm_instance\\pdm_instance.json'):
+#         instance_config = load_json_file(pack_dir + '\\pdm_instance\\pdm_instance.json')
+#         if instance_config['instance_settings']:
+#             instance_config['version_id'] = 'newid'
+#
+#     '''
+#     {
+#         "instance_settings": {
+#             "install_type": "MultiMC_Instance",
+#             "instance_name": "Test Pack 5",
+#             "project_id": 242493,
+#             "project_name": "triarcraft",
+#             "test": [
+#                 "test",
+#                 "list"
+#             ],
+#             "update_automatic": true,
+#             "update_check": true,
+#             "update_type": "All",
+#             "version_id": "2287097"
+#         }
+#     }
+#     '''
+#     pass
 
 
 def download_mods(instance_dir):
