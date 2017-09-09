@@ -279,9 +279,9 @@ def get_modpack_version_list(project_identifier):
     if type(project_identifier) is str:
         project_identifier = project_identifier.strip().replace(" ", "-").lower()
         if project_identifier == "":
-            return []
+            return ['', 0, '', []]
     else:
-        return []
+        return ['', 0, '', []]
 
     log.debug("https://minecraft.curseforge.com/projects/" + project_identifier + "/files")
     sess_response = req_sess.get(
@@ -340,7 +340,7 @@ def get_modpack_version_list(project_identifier):
                         ['A', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
 
             return [pack_source, project_id, project_name, bare_pack_version_list]
-    return []
+    return ['', 0, '', []]
 
 
 def download_modpack_zip(pack_source, project_id, project_name, file_id):
