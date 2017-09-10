@@ -96,7 +96,29 @@ def save_json_file(json_configs, dst_file):
         json.dump(json_configs, file, indent=4, sort_keys=True)
 
 
-def move_overwrite_dir(m_src, m_dest, m_ignore=None):
+def movetree_overwrite_dst(m_src, m_dest, m_ignore=None):
+    def _recursive_overwrite(src, dest, ignore):
+        if os.path.isdir(src):
+            if not os.path.isdir(dest):
+                os.makedirs(dest)
+            files = os.listdir(src)
+            if ignore is not None:
+                ignored = ignore(src, files)
+            else:
+                ignored = set()
+            for f in files:
+                if f not in ignored:
+                    _recursive_overwrite(
+                        os.path.join(src, f),
+                        os.path.join(dest, f),
+                        ignore)
+        else:
+            shutil.move(src, dest)
+    _recursive_overwrite(m_src, m_dest, m_ignore)
+    shutil.rmtree(m_src)
+
+
+def copytree_overwrite_dst(m_src, m_dest, m_ignore=None):
     def _recursive_overwrite(src, dest, ignore):
         if os.path.isdir(src):
             if not os.path.isdir(dest):
@@ -115,7 +137,6 @@ def move_overwrite_dir(m_src, m_dest, m_ignore=None):
         else:
             shutil.copyfile(src, dest)
     _recursive_overwrite(m_src, m_dest, m_ignore)
-    shutil.rmtree(m_src)
 
 
 def create_dir_if_not_exist(path):
@@ -164,12 +185,14 @@ class InstanceInfo:
     project_name = ''
     version_id = 0
     instance_name = ''
-    install_type = ''
+    install_type = 'mmc'  # types: mmc, curse
     update_type = ''
     update_check = False
     update_automatic = False
-    update_version_id = 0
+    merge_custom = True
 
+    instance_path = ''
+    update_version_id = 0
     list_version_id = []
 
     master_thread_running = True
@@ -341,13 +364,13 @@ def get_modpack_version_list(project_identifier):
             for listElement in content_version_list:
                 if listElement[2] == '<div class="release-phase tip" title="Release"></div>':
                     bare_pack_version_list.append(
-                        ['R', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
+                        [1, listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
                 elif listElement[2] == '<div class="beta-phase tip" title="Beta"></div>':
                     bare_pack_version_list.append(
-                        ['B', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
+                        [2, listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
                 elif listElement[2] == '<div class="alpha-phase tip" title="Alpha"></div>':
                     bare_pack_version_list.append(
-                        ['A', listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
+                        [3, listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
 
             return [pack_source, project_id, project_name, bare_pack_version_list]
     return ['', 0, '', []]
@@ -399,8 +422,8 @@ def download_modpack_zip(pack_source, project_id, project_name, file_id):
         else:
             print(str(file_name + " (DL: " + "size: ?" + ")"))
 
-        mocpack_part_path = os.path.join(CACHE_PATH, file_name + '.part')
-        with open(mocpack_part_path, 'wb') as f:
+        modpack_part_path = os.path.join(CACHE_PATH, file_name + '.part')
+        with open(modpack_part_path, 'wb') as f:
             for chunk in request_file_response.iter_content(1024):
                 InstanceInfo.current_file_size += len(chunk)
                 f.write(chunk)
@@ -408,7 +431,7 @@ def download_modpack_zip(pack_source, project_id, project_name, file_id):
                     sys.exit()
 
         create_dir_if_not_exist(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id)
-        shutil.move(mocpack_part_path,
+        shutil.move(modpack_part_path,
                     MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
     else:
         InstanceInfo.is_done = True
@@ -444,6 +467,7 @@ def load_instance_settings(instance_dir):
             InstanceInfo.update_type = instance_config['update_type']
             InstanceInfo.update_check = instance_config['update_check']
             InstanceInfo.update_automatic = instance_config['update_automatic']
+            InstanceInfo.merge_custom = instance_config['merge_custom']
             # print(InstanceInfo.source)
             # print(InstanceInfo.project_id)
             # print(InstanceInfo.project_name)
@@ -453,6 +477,7 @@ def load_instance_settings(instance_dir):
             # print(InstanceInfo.update_type)
             # print(InstanceInfo.update_check)
             # print(InstanceInfo.update_automatic)
+            # print(InstanceInfo.merge_custom)
             return True
     else:
         # No configs :(
@@ -473,7 +498,8 @@ def save_instance_settings(instance_dir):
                 "update_automatic": InstanceInfo.update_automatic,
                 "update_check": InstanceInfo.update_check,
                 "update_type": InstanceInfo.update_type,
-                "version_id": InstanceInfo.version_id
+                "version_id": InstanceInfo.version_id,
+                "merge_custom": InstanceInfo.merge_custom
             }
         }
         save_json_file(instance_config, os.path.join(instance_dir, PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE))
@@ -485,6 +511,7 @@ def save_instance_settings(instance_dir):
 
 
 def download_mods(instance_dir):
+    InstanceInfo.is_done = False
     """
     :param instance_dir: The minecraft directory that contains the curse manifest.json file.
     :return: True on success, False on failure.
@@ -517,7 +544,7 @@ def download_mods(instance_dir):
 
     if override_path.exists():
         log.info("shutil.move: " + str(override_path) + str(minecraft_path))
-        move_overwrite_dir(str(override_path), str(minecraft_path))
+        movetree_overwrite_dst(str(override_path), str(minecraft_path))
     if not minecraft_path.exists():
         log.debug("mkdir: " + str(minecraft_path))
         minecraft_path.mkdir()
@@ -666,7 +693,6 @@ def initialize_program_environment():
     create_dir_if_not_exist(MOD_CACHE)
     # TODO: Program settings file. create if non-existing.
     # TODO: Add other steps that should be check at startup time.
-    pass
 
 
 # If this script is being run then start. else if being accessed don't try and run the gui stuffs.

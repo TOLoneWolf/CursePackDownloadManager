@@ -19,7 +19,7 @@ if __name__ == '__main__':
         InstanceInfo.list_version_id = get_modpack_version_list('ftb beyond')
     # print(InstanceInfo.list_version_id)
     InstanceInfo.update_version_id = 0
-    InstanceInfo.update_type = "R"
+    InstanceInfo.update_type = 1
     if InstanceInfo.source:
         # print(InstanceInfo.source)
         # print(InstanceInfo.project_id)
@@ -27,11 +27,11 @@ if __name__ == '__main__':
         # print(InstanceInfo.list_version_id)
         # print(InstanceInfo.list_version_id[0][1])
         for versions in InstanceInfo.list_version_id:
-            if InstanceInfo.update_type == "All":
+            if InstanceInfo.update_type == 3:
                 if int(versions[1]) > int(InstanceInfo.version_id):
                     InstanceInfo.update_version_id = versions[1]
                     break
-            elif versions[0] == InstanceInfo.update_type:
+            elif versions[0] <= InstanceInfo.update_type:
                 if int(versions[1]) > int(InstanceInfo.version_id):
                     InstanceInfo.update_version_id = versions[1]
                     break

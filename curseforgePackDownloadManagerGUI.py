@@ -120,7 +120,9 @@ class SelectUnpackDirectory(Toplevel):
             self.columnconfigure(column_index, weight=1)
         for row_index in range(5+1):
             self.rowconfigure(row_index, weight=1)
-
+        self.rdo_selected = StringVar(value='mmc')
+        self.rdo_btn_mmc = ttk.Radiobutton(self, text="MMC Instance (Default)", variable=self.rdo_selected, value='mmc')
+        self.rdo_btn_curse = ttk.Radiobutton(self, text="Curse Instance", variable=self.rdo_selected, value='curse')
         self.lbl_entry_name = ttk.Label(self, text="Enter Instance Name: ")
         self.entry_instance_name = ttk.Entry(self)
         self.lbl_dst_folder = ttk.Label(self, text="Select Destination Folder: ")
@@ -129,11 +131,13 @@ class SelectUnpackDirectory(Toplevel):
         self.btn_submit = ttk.Button(self, text="Unpack", command=self.process)
         self.btn_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
-        self.lbl_entry_name.grid(column=0, row=0, sticky='NESW', columnspan=2)
-        self.entry_instance_name.grid(column=0, row=1, sticky='EW', columnspan=1)
-        self.lbl_dst_folder.grid(column=0, row=2, sticky='NESW')
-        self.btn_dst_folder.grid(column=2, row=2, sticky='NESW')
-        self.entry_directory.grid(column=0, row=3, sticky='EW', columnspan=3)
+        self.rdo_btn_mmc.grid(column=0, row=0, sticky='NW')
+        self.rdo_btn_curse.grid(column=2, row=0, sticky='NW')
+        self.lbl_entry_name.grid(column=0, row=1, sticky='NESW', columnspan=2)
+        self.entry_instance_name.grid(column=0, row=2, sticky='EW', columnspan=1)
+        self.lbl_dst_folder.grid(column=0, row=3, sticky='NESW')
+        self.btn_dst_folder.grid(column=2, row=3, sticky='NESW')
+        self.entry_directory.grid(column=0, row=4, sticky='EW', columnspan=3)
         self.btn_submit.grid(column=0, row=5, sticky='NESW')
         self.btn_cancel.grid(column=2, row=5, sticky='NESW')
 
@@ -148,25 +152,50 @@ class SelectUnpackDirectory(Toplevel):
             self.entry_directory.insert(END, path_dst_dir)
 
     def process(self):
-        mc_path = os.path.join(self.entry_directory.get(), self.entry_instance_name.get())
-        log.debug("unpack process: " + str(mc_path))
-        unzip(self.src_zip, mc_path)
-        if os.path.exists(mc_path.join("manifest.json")):
-            if not os.path.exists(mc_path.join(INSTANCE_SETTINGS_FOLDER)):
-                os.mkdir(mc_path.join(INSTANCE_SETTINGS_FOLDER))
-            shutil.copy(mc_path.join('manifest.json'), os.path.join(mc_path, INSTANCE_SETTINGS_FOLDER, "manifest.json"))
-        work_thread = threading.Thread(target=download_mods, args=(mc_path,))
-        work_thread.start()
-        self.close_window()
-        while not InstanceInfo.is_done:
-            time.sleep(0.2)
-            if InstanceInfo.file_size:
-                percent = round((int(InstanceInfo.current_file_size) / int(InstanceInfo.file_size)) * 100, 0)
-                print(str(percent) + " P: " + str(get_human_readable(InstanceInfo.current_file_size)) + "/" + str(get_human_readable(InstanceInfo.file_size)))
-            else:
-                pass
-        print("work_thread: manager.downloads_mods 'isDone' detected.")
-        print("Manager Done Downloading")
+        if self.entry_directory.get():
+            if self.entry_instance_name.get:
+                InstanceInfo.instance_name = self.entry_instance_name.get()
+                InstanceInfo.install_type = self.rdo_selected.get()
+                InstanceInfo.instance_path = os.path.join(self.entry_directory.get(), self.entry_instance_name.get())
+                log.debug("unpack process: " + str(InstanceInfo.instance_path))
+                unzip(self.src_zip, InstanceInfo.instance_path)
+                save_instance_settings(InstanceInfo.instance_path)
+                if os.path.exists(InstanceInfo.instance_path.join("manifest.json")):
+                    if not os.path.exists(InstanceInfo.instance_path.join(PDM_INSTANCE_FOLDER)):
+                        os.mkdir(InstanceInfo.instance_path.join(PDM_INSTANCE_FOLDER))
+                    shutil.copy(InstanceInfo.instance_path.join('manifest.json'), os.path.join(InstanceInfo.instance_path, PDM_INSTANCE_FOLDER, "manifest.json"))
+                work_thread = threading.Thread(target=download_mods, args=(InstanceInfo.instance_path,))
+                work_thread.start()
+                self.close_window()
+                InstanceInfo.is_done = False
+                while not InstanceInfo.is_done:
+                    time.sleep(0.2)
+                    if InstanceInfo.file_size:
+                        percent = round((int(InstanceInfo.current_file_size) / int(InstanceInfo.file_size)) * 100, 0)
+                        print(str(percent) + " P: " + str(get_human_readable(InstanceInfo.current_file_size)) + "/" + str(get_human_readable(InstanceInfo.file_size)))
+                    else:
+                        pass
+
+                # Copy user saved settings and mods back into the instance.
+                if InstanceInfo.merge_custom:
+                    if os.path.exists(
+                            os.path.normpath(os.path.join(InstanceInfo.instance_path, PDM_INSTANCE_FOLDER, 'config'))):
+                        copytree_overwrite_dst(
+                            os.path.normpath(os.path.join(InstanceInfo.instance_path, PDM_INSTANCE_FOLDER, 'config')),
+                            os.path.normpath(os.path.join(InstanceInfo.instance_path,'minecraft', 'config')))
+
+                    if os.path.exists(
+                            os.path.normpath(os.path.join(InstanceInfo.instance_path, PDM_INSTANCE_FOLDER, 'mods'))):
+                        copytree_overwrite_dst(
+                            os.path.normpath(os.path.join(InstanceInfo.instance_path, PDM_INSTANCE_FOLDER, 'mods')),
+                            os.path.normpath(os.path.join(InstanceInfo.instance_path,'minecraft', 'mods')))
+
+                if InstanceInfo.install_type == 'curse':
+                    movetree_overwrite_dst(
+                        os.path.join(InstanceInfo.instance_path, 'minecraft'),
+                        InstanceInfo.instance_path)
+                print("work_thread: manager.downloads_mods 'isDone' detected.")
+                print("Manager Done Downloading")
 
 
 class VersionSelectionMenu(Toplevel):
@@ -186,7 +215,6 @@ class VersionSelectionMenu(Toplevel):
             self.project_id = pack_info[1]
             self.project_name = pack_info[2]
             self.pack_version_list = pack_info[3]
-            self.available_version_types = [False, False, False]  # Release, Beta, Alpha
             self.current_version_list = []
 
             # --- GUI objects.
@@ -212,6 +240,7 @@ class VersionSelectionMenu(Toplevel):
             self.listbox_version_container.rowconfigure(0, weight=1)
             # --- GUI objects.
             self.button_submit = ttk.Button(self, text="Download Selected", command=self.download_selected_pack_version)
+            self.button_submit['state'] = DISABLED  # disallow now and allow later if list is populated.
             self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
             # -- GUI grid config.
             self.lbl_select_version.grid(column=0, row=0, sticky='N', columnspan=2)
@@ -228,60 +257,52 @@ class VersionSelectionMenu(Toplevel):
                 self.rowconfigure(row_index, weight=1)
 
             # --- Logic
-            if self.pack_version_list:
-                for versions in self.pack_version_list:
-                    if versions[0] == "R":
-                        self.available_version_types[0] = True
-                    elif versions[0] == "B":
-                        self.available_version_types[1] = True
-                    elif versions[0] == "A":
-                        self.available_version_types[2] = True
-
-                self.combo_release_type['values'] = ('All',)
-                self.combo_release_type.set('All',)
-                if self.available_version_types[0]:
-                    self.combo_release_type['values'] = self.combo_release_type['values'] + ('Release',)
-                if self.available_version_types[1]:
-                    self.combo_release_type['values'] = self.combo_release_type['values'] + ('Beta',)
-                if self.available_version_types[2]:
-                    self.combo_release_type['values'] = self.combo_release_type['values'] + ('Alpha',)
-            else:
-                self.button_submit['state'] = DISABLED  # Something failed better not allow them to continue.
-
+            self.combo_release_type['values'] = ('Release', 'Release + Beta', 'Release + Beta + Alpha',)
+            self.combo_release_type.set(self.combo_release_type['values'][0])
             self.combo_release_type_update()
         else:  # else if pack_info is empty
             log.error("pack_info list is empty! This should not happen!")
 
+    # TODO: Clean up the list_only_these_versions if possible.
     def combo_release_type_update(self, *_):
         log.debug("combobox: " + str(self.combo_release_type.get()))
         display_list = []
         self.current_version_list = []  # Reset list every time.
         list_only_these_versions = self.combo_release_type.get()
         for listElement in self.pack_version_list:
-            if list_only_these_versions == "All":
-                self.current_version_list.append(listElement[1])
-                display_list.append(listElement[0] + ' - ' + listElement[1] + ' - ' + listElement[2])
-
-            elif list_only_these_versions == "Release":
-                if listElement[0] == "R":
+            if list_only_these_versions == "Release":
+                if listElement[0] == 1:
                     self.current_version_list.append(listElement[1])
-                    display_list.append(listElement[0] + ' - ' + listElement[1] + ' - ' + listElement[2])
+                    display_list.append('Release' + ' - ' + listElement[1] + ' - ' + listElement[2])
 
-            elif list_only_these_versions == "Beta":
-                if listElement[0] == "B":
+            elif list_only_these_versions == "Release + Beta":
+                if listElement[0] == 1:
                     self.current_version_list.append(listElement[1])
-                    display_list.append(listElement[0] + ' - ' + listElement[1] + ' - ' + listElement[2])
+                    display_list.append('Release' + ' - ' + listElement[1] + ' - ' + listElement[2])
+                elif listElement[0] == 2:
+                    self.current_version_list.append(listElement[1])
+                    display_list.append('Beta' + ' - ' + listElement[1] + ' - ' + listElement[2])
 
-            elif list_only_these_versions == "Alpha":
-                if listElement[0] == "A":
+            elif list_only_these_versions == "Release + Beta + Alpha":
+                if listElement[0] == 1:
                     self.current_version_list.append(listElement[1])
-                    display_list.append(listElement[0] + ' - ' + listElement[1] + ' - ' + listElement[2])
+                    display_list.append('Release' + ' - ' + listElement[1] + ' - ' + listElement[2])
+                elif listElement[0] == 2:
+                    self.current_version_list.append(listElement[1])
+                    display_list.append('Beta' + ' - ' + listElement[1] + ' - ' + listElement[2])
+                elif listElement[0] == 3:
+                    self.current_version_list.append(listElement[1])
+                    display_list.append('Alpha' + ' - ' + listElement[1] + ' - ' + listElement[2])
 
         self.listbox_version.delete(0, END)
         for listElement in display_list:
             self.listbox_version.insert(END, listElement)
         self.listbox_version.selection_set(0)
         self.listbox_version.activate(0)
+        if not self.current_version_list:
+            self.button_submit['state'] = DISABLED  # Something failed better not allow them to continue.
+        else:
+            self.button_submit['state'] = NORMAL  # Something failed better not allow them to continue.
         log.debug("Version Current Selection: " + str(self.listbox_version.curselection()))
 
     # FIXME: Remove this as it is no longer used??
@@ -291,12 +312,6 @@ class VersionSelectionMenu(Toplevel):
     def download_selected_pack_version(self):
         print("download_selected_pack_version")
         print(self.project_name, self.current_version_list[self.listbox_version.curselection()[0]])
-        # TODO: Ask for install directory, folder name.
-        #   TODO: Check if already exists.
-        #   TODO: Ask if you want to replace existing or cancel.
-        # TODO: Unpack to selected directory.
-        # TODO: Create pack setting/info file (update url, project id, curFileID aka version, etc)
-
         src_zip = download_modpack_zip(
             pack_source=self.pack_source,
             project_id=self.project_id,
@@ -305,6 +320,18 @@ class VersionSelectionMenu(Toplevel):
         print("work_thread: manager.download_modpack_zip 'isDone' detected.")
         print("Manager Done Downloading")
         if src_zip:
+            local_type = self.combo_release_type.get()
+            if local_type == "Release":
+                InstanceInfo.update_type = 1
+            elif local_type == "Release + Beta":
+                InstanceInfo.update_type = 2
+            elif local_type == "Release + Beta + Alpha":
+                InstanceInfo.update_type = 3
+
+            InstanceInfo.source = self.pack_source
+            InstanceInfo.project_id = self.project_id
+            InstanceInfo.project_name = self.project_name
+            InstanceInfo.version_id = self.current_version_list[self.listbox_version.curselection()[0]]
             SelectUnpackDirectory(src_zip)
         else:
             log.error("src_zip returned nothing!")
