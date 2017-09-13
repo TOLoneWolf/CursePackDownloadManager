@@ -120,8 +120,9 @@ class SelectUnpackDirectory(Toplevel):
             self.columnconfigure(column_index, weight=1)
         for row_index in range(5+1):
             self.rowconfigure(row_index, weight=1)
-        self.rdo_selected = StringVar(value='mmc')
-        self.rdo_btn_mmc = ttk.Radiobutton(self, text="MMC Instance (Default)", variable=self.rdo_selected, value='mmc')
+        self.rdo_selected = StringVar(value='custom')
+        self.rdo_btn_default = ttk.Radiobutton(self, text="Custom (default)", variable=self.rdo_selected, value='custom')
+        self.rdo_btn_mmc = ttk.Radiobutton(self, text="MMC Instance", variable=self.rdo_selected, value='mmc')
         self.rdo_btn_curse = ttk.Radiobutton(self, text="Curse Instance", variable=self.rdo_selected, value='curse')
         self.lbl_entry_name = ttk.Label(self, text="Enter Instance Name: ")
         self.entry_instance_name = ttk.Entry(self)
@@ -131,7 +132,8 @@ class SelectUnpackDirectory(Toplevel):
         self.btn_submit = ttk.Button(self, text="Unpack", command=self.process)
         self.btn_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
-        self.rdo_btn_mmc.grid(column=0, row=0, sticky='NW')
+        self.rdo_btn_default.grid(column=0, row = 0, sticky="NW")
+        self.rdo_btn_mmc.grid(column=1, row=0, sticky='NW')
         self.rdo_btn_curse.grid(column=2, row=0, sticky='NW')
         self.lbl_entry_name.grid(column=0, row=1, sticky='NESW', columnspan=2)
         self.entry_instance_name.grid(column=0, row=2, sticky='EW', columnspan=1)
@@ -146,7 +148,20 @@ class SelectUnpackDirectory(Toplevel):
         self.destroy()
 
     def browse_folder(self):
-        path_dst_dir = filedialog.askdirectory(title="Select Destination Folder")
+        if self.rdo_selected.get() == "mmc":
+            path_dst_dir = filedialog.askdirectory(
+                title="Select Destination Folder",
+                initialdir=program_settings["custom"])
+        elif self.rdo_selected.get() == "mmc":
+            path_dst_dir = filedialog.askdirectory(
+                title="Select Destination Folder",
+                initialdir=program_settings["MultiMC"])
+        elif self.rdo_selected.get() == "curse":
+            path_dst_dir = filedialog.askdirectory(
+                title="Select Destination Folder",
+                initialdir=program_settings["curse_client"])
+        else:
+            path_dst_dir = filedialog.askdirectory(title="Select Destination Folder")
         if not path_dst_dir == "":
             self.entry_directory.delete(0, END)
             self.entry_directory.insert(END, path_dst_dir)
@@ -156,7 +171,7 @@ class SelectUnpackDirectory(Toplevel):
             if self.entry_instance_name.get:
                 InstanceInfo.instance_name = self.entry_instance_name.get()
                 InstanceInfo.install_type = self.rdo_selected.get()
-                InstanceInfo.instance_path = os.path.join(self.entry_directory.get(), self.entry_instance_name.get())
+                InstanceInfo.instance_path = os.path.normpath(os.path.join(self.entry_directory.get(), self.entry_instance_name.get()))
                 log.debug("unpack process: " + str(InstanceInfo.instance_path))
                 unzip(self.src_zip, InstanceInfo.instance_path)
                 save_instance_settings(InstanceInfo.instance_path)
@@ -194,6 +209,12 @@ class SelectUnpackDirectory(Toplevel):
                     movetree_overwrite_dst(
                         os.path.join(InstanceInfo.instance_path, 'minecraft'),
                         InstanceInfo.instance_path)
+                save_instance_settings(InstanceInfo.instance_path)
+
+                if not {"location": InstanceInfo.instance_path} in installed_instances:
+                    installed_instances.append({"location": InstanceInfo.instance_path})
+                    save_json_file({"instances": installed_instances}, INSTALLED_INSTANCE_FILE)
+
                 print("work_thread: manager.downloads_mods 'isDone' detected.")
                 print("Manager Done Downloading")
 

@@ -50,11 +50,12 @@ DEFAULT_PROGRAM_SETTINGS = {
     "update_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/releases",
     "installed_instances": "pdm_installed_instances.json",
     "default_instance_type": "MultiMC",
+    "custom": "D:\\Coding-Projects\\python\\tolonewolf\\cursePackDownloadManager\\instances",
     "curse_client": "D:\\Users\\User\\Downloads\\Minecraft\\Minecraft Luanchers\\Curse\\Minecraft\\Instances",
     "MultiMC": "D:\\Users\\User\\Downloads\\Minecraft\\Minecraft Luanchers\\MultiMC 5\\instances",
     "Vanilla_Client": "C:\\Users\\User\\AppData\\Roaming\\.minecraft",
     "cache_path": "curse_download_cache"
-        }
+}
 # program_settings should get new values on load if user changed them.
 program_settings = DEFAULT_PROGRAM_SETTINGS
 
