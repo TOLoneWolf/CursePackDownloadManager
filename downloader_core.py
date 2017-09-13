@@ -27,21 +27,45 @@ PROGRAM_NAME = 'Curse Pack Download Manager'
 PROGRAM_VERSION_NUMBER = '0.0.0.1'
 PROGRAM_VERSION_BUILD = 'Alpha'
 
-CACHE_PATH = "curse_download_cache"
-MODPACK_ZIP_CACHE = os.path.join(CACHE_PATH, "modpacks_cache")
-MOD_CACHE = os.path.join(CACHE_PATH, "mods_cache")
-CONFIG_FILE = "pdm_settings.json"
-INSTALLED_INSTANCE_FILE = "pdm_installed_instances.json"
+
+# keys for the settings dictionary. TODO: keep this?
+class KEY:
+    self_update_check = "self_update_check"
+    on_start_check_instance_updates = "on_start_check_instance_updates"
+    self_update_check_url = "self_update_check_url"
+    update_url = "update_url"
+    installed_instances = "installed_instances"
+    default_instance_type = "default_instance_type"
+    curse_client = "curse_client"
+    MultiMC = "MultiMC"
+    Vanilla_Client = "Vanilla_Client"
+    cache_path = "cache_path"
+
+
 # Defaults settings in case we want to reset to them later.
 DEFAULT_PROGRAM_SETTINGS = {
     "self_update_check": True,
     "on_start_check_instance_updates": True,
+    "self_update_check_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/master/.github/current_version.json",
     "update_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/releases",
-    "installed_instances": INSTALLED_INSTANCE_FILE,
-    "cache_path": CACHE_PATH
+    "installed_instances": "pdm_installed_instances.json",
+    "default_instance_type": "MultiMC",
+    "curse_client": "D:\\Users\\User\\Downloads\\Minecraft\\Minecraft Luanchers\\Curse\\Minecraft\\Instances",
+    "MultiMC": "D:\\Users\\User\\Downloads\\Minecraft\\Minecraft Luanchers\\MultiMC 5\\instances",
+    "Vanilla_Client": "C:\\Users\\User\\AppData\\Roaming\\.minecraft",
+    "cache_path": "curse_download_cache"
         }
 # program_settings should get new values on load if user changed them.
 program_settings = DEFAULT_PROGRAM_SETTINGS
+
+CACHE_PATH = "curse_download_cache"  # FIXME:
+MODPACK_ZIP_CACHE = os.path.join(CACHE_PATH, "modpacks_cache")
+MOD_CACHE = os.path.join(CACHE_PATH, "mods_cache")
+CONFIG_FILE = "pdm_settings.json"
+INSTALLED_INSTANCE_FILE = "pdm_installed_instances.json"  # FIXME:
+installed_instances = []
+
+
 req_sess = requests.session()
 req_sess.headers.update({
     'User-Agent': requests.utils.default_user_agent() +
@@ -94,6 +118,67 @@ def load_json_file(src_file):
 def save_json_file(json_configs, dst_file):
     with open(dst_file, 'w') as file:
         json.dump(json_configs, file, indent=4, sort_keys=True)
+
+
+# TODO: Create, save, and load instance settings.
+def load_instance_settings(instance_dir):
+    if os.path.exists(
+            os.path.join(instance_dir, PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE)):
+        instance_config = load_json_file(
+            os.path.join(instance_dir, PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE))['instance_settings']
+        # print(instance_config)
+        if instance_config:
+            InstanceInfo.source = instance_config['url_source']
+            InstanceInfo.project_id = instance_config['project_id']
+            InstanceInfo.project_name = instance_config['project_name']
+            InstanceInfo.version_id = instance_config['version_id']
+
+            InstanceInfo.instance_name = instance_config['instance_name']
+            InstanceInfo.install_type = instance_config['install_type']
+            InstanceInfo.update_type = instance_config['update_type']
+            InstanceInfo.update_check = instance_config['update_check']
+            InstanceInfo.update_automatic = instance_config['update_automatic']
+            InstanceInfo.merge_custom = instance_config['merge_custom']
+            # print(InstanceInfo.source)
+            # print(InstanceInfo.project_id)
+            # print(InstanceInfo.project_name)
+            # print(InstanceInfo.version_id)
+            # print(InstanceInfo.instance_name)
+            # print(InstanceInfo.install_type)
+            # print(InstanceInfo.update_type)
+            # print(InstanceInfo.update_check)
+            # print(InstanceInfo.update_automatic)
+            # print(InstanceInfo.merge_custom)
+            return True
+    else:
+        # No configs :(
+        return False
+
+
+def save_instance_settings(instance_dir):
+    if os.path.exists(instance_dir):
+        if not os.path.exists(os.path.join(instance_dir, PDM_INSTANCE_FOLDER)):
+            os.mkdir(os.path.join(instance_dir, PDM_INSTANCE_FOLDER))
+        instance_config = {
+            "instance_settings": {
+                "url_source": InstanceInfo.source,
+                "install_type": InstanceInfo.install_type,
+                "instance_name": InstanceInfo.instance_name,
+                "project_id": InstanceInfo.project_id,
+                "project_name": InstanceInfo.project_name,
+                "update_automatic": InstanceInfo.update_automatic,
+                "update_check": InstanceInfo.update_check,
+                "update_type": InstanceInfo.update_type,
+                "version_id": InstanceInfo.version_id,
+                "merge_custom": InstanceInfo.merge_custom
+            }
+        }
+        save_json_file(instance_config, os.path.join(instance_dir, PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE))
+    else:
+        raise OSError(
+            "Path does not exist.\n"
+            "Provided Path: {0}".format(os.path.join(instance_dir, PDM_INSTANCE_FOLDER)))
+    return True
 
 
 def movetree_overwrite_dst(m_src, m_dest, m_ignore=None):
@@ -217,42 +302,46 @@ def instance_update_check():
         pack_instance_list = load_json_file(INSTALLED_INSTANCE_FILE)["instances"]
         log.debug(str(INSTALLED_INSTANCE_FILE))
         log.debug(str(pack_instance_list))
+        if pack_instance_list:
+            pack_instance_list[:] = [instance_config for instance_config in pack_instance_list if
+                                     os.path.exists(os.path.join(instance_config["location"], PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE))]
+            if pack_instance_list:
+                for instance_config in pack_instance_list:
+                    instance_config = os.path.join(instance_config["location"], PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE)
+                    if os.path.exists(instance_config):  # If config file exist.
+                        instance_settings = load_json_file(instance_config)
+                        if not instance_settings["instance_settings"]["update_check"]:
+                            continue
+                        request_results = get_modpack_version_list(instance_settings["instance_settings"]["project_name"])
+                        # results <- [pack_source, project_id, project_name, bare_pack_version_list]
+                        log.debug(
+                            "Local Version: " + str(instance_settings["instance_settings"]["version_id"]) +
+                            "\nRemote Version: " + str(request_results[3][0][1]))
+                        if int(request_results[3][0][1]) == int(instance_settings["instance_settings"]["version_id"]):
+                            print("Same Version")
+                        elif int(request_results[3][0][1]) > int(instance_settings["instance_settings"]["version_id"]):
+                            print("New Version Found")
+                            if instance_settings["instance_settings"]["update_automatic"]:
+                                dst_dir = os.path.dirname(os.path.dirname(instance_config))
+                                dst_folder_name = os.path.basename(os.path.dirname(instance_config))
+                                src_zip = download_modpack_zip(request_results[0], request_results[1],
+                                                                          request_results[2],
+                                                                          request_results[3][0][1])
 
-        for instance_config in pack_instance_list:
-            instance_config = instance_config["location"]
-
-            if os.path.exists(instance_config):  # If config file exist.
-                instance_settings = load_json_file(instance_config)
-                if not instance_settings["instance_settings"]["update_check"]:
-                    continue
-                request_results = get_modpack_version_list(instance_settings["instance_settings"]["project_name"])
-                # results <- [pack_source, project_id, project_name, bare_pack_version_list]
-                log.debug(
-                    "Local Version: " + str(instance_settings["instance_settings"]["version_id"]) +
-                    "\nRemote Version: " + str(request_results[3][0][1]))
-                if int(request_results[3][0][1]) == int(instance_settings["instance_settings"]["version_id"]):
-                    print("Same Version")
-                elif int(request_results[3][0][1]) > int(instance_settings["instance_settings"]["version_id"]):
-                    print("New Version Found")
-                    if instance_settings["instance_settings"]["update_automatic"]:
-                        dst_dir = os.path.dirname(os.path.dirname(instance_config))
-                        dst_folder_name = os.path.basename(os.path.dirname(instance_config))
-                        src_zip = download_modpack_zip(request_results[0], request_results[1],
-                                                                  request_results[2],
-                                                                  request_results[3][0][1])
-
-                        # TODO: copy old manifest to safety for use in update comparision.
-                        unpack_modpack_zip(src_zip, dst_folder_name, (dst_dir + "\\"))
-                        download_mods(os.path.join(dst_dir, dst_folder_name))
-                        instance_settings["instance_settings"]["version_id"] = request_results[3][0][1]  # update version id.
-                        save_json_file(instance_settings, instance_config)
-                else:
-                    print("idk how but you got a newer version then is available?")
-            else:
-                # TODO handle bad instance paths and remove them?.
-                print("instance not found at this path:")
-                print(instance_config)
-                pass
+                                # TODO: copy old manifest to safety for use in update comparision.
+                                unpack_modpack_zip(src_zip, dst_folder_name, (dst_dir + "\\"))
+                                download_mods(os.path.join(dst_dir, dst_folder_name))
+                                instance_settings["instance_settings"]["version_id"] = request_results[3][0][1]  # update version id.
+                                save_json_file(instance_settings, instance_config)
+                        else:
+                            print("idk how but you got a newer version then is available?")
+                    else:
+                        # TODO handle bad instance paths and remove them?.
+                        print("instance not found at this path:")
+                        print(instance_config)
+                        pass
+        else:
+            print("No instances seam to exist right now.")
     else:
         # TODO: Make one at program start if doesn't exist.
         log.error("No pdm_installed_instances.json found.")
@@ -449,67 +538,6 @@ def unpack_modpack_zip(src_dir, dst_folder_name, dst_dir):
     unzip(src_dir, dst_dir+dst_folder_name)
 
 
-# TODO: Create, save, and load instance settings.
-def load_instance_settings(instance_dir):
-    if os.path.exists(
-            os.path.join(instance_dir, PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE)):
-        instance_config = load_json_file(
-            os.path.join(instance_dir, PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE))['instance_settings']
-        # print(instance_config)
-        if instance_config:
-            InstanceInfo.source = instance_config['url_source']
-            InstanceInfo.project_id = instance_config['project_id']
-            InstanceInfo.project_name = instance_config['project_name']
-            InstanceInfo.version_id = instance_config['version_id']
-
-            InstanceInfo.instance_name = instance_config['instance_name']
-            InstanceInfo.install_type = instance_config['install_type']
-            InstanceInfo.update_type = instance_config['update_type']
-            InstanceInfo.update_check = instance_config['update_check']
-            InstanceInfo.update_automatic = instance_config['update_automatic']
-            InstanceInfo.merge_custom = instance_config['merge_custom']
-            # print(InstanceInfo.source)
-            # print(InstanceInfo.project_id)
-            # print(InstanceInfo.project_name)
-            # print(InstanceInfo.version_id)
-            # print(InstanceInfo.instance_name)
-            # print(InstanceInfo.install_type)
-            # print(InstanceInfo.update_type)
-            # print(InstanceInfo.update_check)
-            # print(InstanceInfo.update_automatic)
-            # print(InstanceInfo.merge_custom)
-            return True
-    else:
-        # No configs :(
-        return False
-
-
-def save_instance_settings(instance_dir):
-    if os.path.exists(instance_dir):
-        if not os.path.exists(os.path.join(instance_dir, PDM_INSTANCE_FOLDER)):
-            os.mkdir(os.path.join(instance_dir, PDM_INSTANCE_FOLDER))
-        instance_config = {
-            "instance_settings": {
-                "url_source": InstanceInfo.source,
-                "install_type": InstanceInfo.install_type,
-                "instance_name": InstanceInfo.instance_name,
-                "project_id": InstanceInfo.project_id,
-                "project_name": InstanceInfo.project_name,
-                "update_automatic": InstanceInfo.update_automatic,
-                "update_check": InstanceInfo.update_check,
-                "update_type": InstanceInfo.update_type,
-                "version_id": InstanceInfo.version_id,
-                "merge_custom": InstanceInfo.merge_custom
-            }
-        }
-        save_json_file(instance_config, os.path.join(instance_dir, PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE))
-    else:
-        raise OSError(
-            "Path does not exist.\n"
-            "Provided Path: {0}".format(os.path.join(instance_dir, PDM_INSTANCE_FOLDER)))
-    return True
-
-
 def download_mods(instance_dir):
     InstanceInfo.is_done = False
     """
@@ -687,10 +715,15 @@ def download_mods(instance_dir):
 
 
 def initialize_program_environment():
+    global installed_instances
     log.debug("Curse PDM: Checking/Initializing program environment")
     init_pdm_settings()
     create_dir_if_not_exist(MODPACK_ZIP_CACHE)
     create_dir_if_not_exist(MOD_CACHE)
+    if os.path.exists(INSTALLED_INSTANCE_FILE):
+        installed_instances = load_json_file(INSTALLED_INSTANCE_FILE)["instances"]
+    else:
+        save_json_file({"instances": installed_instances}, INSTALLED_INSTANCE_FILE)
     # TODO: Program settings file. create if non-existing.
     # TODO: Add other steps that should be check at startup time.
 
