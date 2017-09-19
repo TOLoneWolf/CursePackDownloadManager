@@ -223,6 +223,10 @@ def save_mmc_cfg(instance_path):
     return True
 
 
+def save_program_settings():
+    save_json_file(program_settings, CONFIG_FILE)
+    pass
+
 
 def movetree_overwrite_dst(m_src, m_dest, m_ignore=None):
     def _recursive_overwrite(src, dest, ignore):

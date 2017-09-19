@@ -512,24 +512,26 @@ class ProgramSettings(Toplevel):
         self.lbl_vanilla_path = ttk.Label(self, text="Vanilla: ")
         self.ent_vanilla_path = ttk.Entry(self)
 
+        self.btn_save = ttk.Button(self, text="Save", command=self.save)
         self.btn_apply = ttk.Button(self, text="Apply", command=self.apply)
         self.btn_reset = ttk.Button(self, text="Reset", command=self.reset)
         self.btn_close = ttk.Button(self, text="Close", command=self.close_window)
         # --- Grid Layout
         self.lbl_custom_path.grid(column=0, row=0, sticky='W')
-        self.ent_custom_path.grid(column=0, row=1, sticky='EW', columnspan=2)
+        self.ent_custom_path.grid(column=0, row=1, sticky='EW', columnspan=3)
         self.lbl_multimc_path.grid(column=0, row=2, sticky='W')
-        self.ent_multimc_path.grid(column=0, row=3, sticky='EW', columnspan=2)
+        self.ent_multimc_path.grid(column=0, row=3, sticky='EW', columnspan=3)
         self.lbl_curse_path.grid(column=0, row=4, sticky='W')
-        self.ent_curse_path.grid(column=0, row=5, sticky='EW', columnspan=2)
+        self.ent_curse_path.grid(column=0, row=5, sticky='EW', columnspan=3)
         self.lbl_vanilla_path.grid(column=0, row=6, sticky='W')
-        self.ent_vanilla_path.grid(column=0, row=7, sticky='EW', columnspan=2)
+        self.ent_vanilla_path.grid(column=0, row=7, sticky='EW', columnspan=3)
 
-        self.btn_apply.grid(column=0, row=15, sticky='NESW')
-        self.btn_reset.grid(column=1, row=15, sticky='NESW')
-        self.btn_close.grid(column=2, row=15, sticky='NESW')
+        self.btn_save.grid(column=0, row=15, sticky='NESW')
+        self.btn_apply.grid(column=1, row=15, sticky='NESW')
+        self.btn_reset.grid(column=2, row=15, sticky='NESW')
+        self.btn_close.grid(column=3, row=15, sticky='NESW')
 
-        for column_index in range(2+1):
+        for column_index in range(3+1):
             self.columnconfigure(column_index, weight=1)
         for row_index in range(15+1):
             self.rowconfigure(row_index, weight=1)
@@ -539,10 +541,6 @@ class ProgramSettings(Toplevel):
     def close_window(self):
         self.grab_release()
         self.destroy()
-
-    def apply(self):
-        print(os.path.normpath(self.ent_custom_path.get()))
-        pass
 
     def reset(self):
         self.ent_custom_path.delete(0, END)
@@ -554,6 +552,19 @@ class ProgramSettings(Toplevel):
         self.ent_vanilla_path.delete(0, END)
         self.ent_vanilla_path.insert(0, program_settings["Vanilla_Client"])
         pass
+
+    def apply(self):
+        program_settings['custom'] = os.path.normpath(self.ent_custom_path.get())
+        program_settings['MultiMC'] = os.path.normpath(self.ent_multimc_path.get())
+        program_settings['curse_client'] = os.path.normpath(self.ent_curse_path.get())
+        program_settings["Vanilla_Client"] = os.path.normpath(self.ent_vanilla_path.get())
+        pass
+
+    def save(self):
+        self.apply()
+        save_program_settings()
+        pass
+
 
 
 class RootWindow(Tk):
