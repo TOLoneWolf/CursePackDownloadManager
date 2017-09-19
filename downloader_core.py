@@ -50,14 +50,15 @@ DEFAULT_PROGRAM_SETTINGS = {
     "update_url": "https://raw.githubusercontent.com/TOLoneWolf/cursePackDownloadManager/releases",
     "installed_instances": "pdm_installed_instances.json",
     "default_instance_type": "MultiMC",
-    "custom": "D:\\Coding-Projects\\python\\tolonewolf\\cursePackDownloadManager\\instances",
-    "curse_client": "D:\\Users\\User\\Downloads\\Minecraft\\Minecraft Luanchers\\Curse\\Minecraft\\Instances",
-    "MultiMC": "D:\\Users\\User\\Downloads\\Minecraft\\Minecraft Luanchers\\MultiMC 5\\instances",
-    "Vanilla_Client": "C:\\Users\\User\\AppData\\Roaming\\.minecraft",
+    "custom": "",
+    "curse_client": "",
+    "MultiMC": "",
+    "Vanilla_Client": "",
     "cache_path": "curse_download_cache"
 }
 # program_settings should get new values on load if user changed them.
-program_settings = DEFAULT_PROGRAM_SETTINGS
+program_settings = {}
+program_settings.update(DEFAULT_PROGRAM_SETTINGS)
 
 CACHE_PATH = "curse_download_cache"  # FIXME:
 MODPACK_ZIP_CACHE = os.path.join(CACHE_PATH, "modpacks_cache")
@@ -278,12 +279,11 @@ def create_dir_if_not_exist(path):
 
 def init_pdm_settings():
     # TODO: Finish default configs, and loading them.
-    global program_settings
     if not os.path.exists(CONFIG_FILE):
         save_json_file(program_settings, CONFIG_FILE)
         log.debug("Default Program Config Created.")
     if os.path.exists(CONFIG_FILE):
-        program_settings = load_json_file(CONFIG_FILE)
+        program_settings.update(load_json_file(CONFIG_FILE))
 
 
 def get_human_readable(size, precision=2, requestz=-1):

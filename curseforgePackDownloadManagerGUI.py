@@ -486,8 +486,74 @@ class EditInstance:
     pass  # TODO add editing instances options.
 
 
-class ProgramSettings:
-    pass  # TODO add program settings options.
+class ProgramSettings(Toplevel):
+    def __init__(self):
+        Toplevel.__init__(self)
+        self.minsize(width=600, height=300)
+        self.maxsize(width=600, height=300)
+        self.resizable(FALSE, FALSE)
+        self.protocol("WM_DELETE_WINDOW", self.close_window)
+        self.title("Program Settings")
+        center_window(self)
+        self.focus()
+        self.grab_set()
+
+        self.custom_instance_path = ''
+        self.multimc_instance_path = ''
+        self.curse_client_instance_path = ''
+        self.vanilla_instance_path = ''
+
+        self.lbl_custom_path = ttk.Label(self, text="Custom: ")
+        self.ent_custom_path = ttk.Entry(self)
+        self.lbl_multimc_path = ttk.Label(self, text="MultiMC: ")
+        self.ent_multimc_path = ttk.Entry(self)
+        self.lbl_curse_path = ttk.Label(self, text="Curse(Twitch) Client: ")
+        self.ent_curse_path = ttk.Entry(self)
+        self.lbl_vanilla_path = ttk.Label(self, text="Vanilla: ")
+        self.ent_vanilla_path = ttk.Entry(self)
+
+        self.btn_apply = ttk.Button(self, text="Apply", command=self.apply)
+        self.btn_reset = ttk.Button(self, text="Reset", command=self.reset)
+        self.btn_close = ttk.Button(self, text="Close", command=self.close_window)
+        # --- Grid Layout
+        self.lbl_custom_path.grid(column=0, row=0, sticky='W')
+        self.ent_custom_path.grid(column=0, row=1, sticky='EW', columnspan=2)
+        self.lbl_multimc_path.grid(column=0, row=2, sticky='W')
+        self.ent_multimc_path.grid(column=0, row=3, sticky='EW', columnspan=2)
+        self.lbl_curse_path.grid(column=0, row=4, sticky='W')
+        self.ent_curse_path.grid(column=0, row=5, sticky='EW', columnspan=2)
+        self.lbl_vanilla_path.grid(column=0, row=6, sticky='W')
+        self.ent_vanilla_path.grid(column=0, row=7, sticky='EW', columnspan=2)
+
+        self.btn_apply.grid(column=0, row=15, sticky='NESW')
+        self.btn_reset.grid(column=1, row=15, sticky='NESW')
+        self.btn_close.grid(column=2, row=15, sticky='NESW')
+
+        for column_index in range(2+1):
+            self.columnconfigure(column_index, weight=1)
+        for row_index in range(15+1):
+            self.rowconfigure(row_index, weight=1)
+
+        self.reset()
+
+    def close_window(self):
+        self.grab_release()
+        self.destroy()
+
+    def apply(self):
+        print(os.path.normpath(self.ent_custom_path.get()))
+        pass
+
+    def reset(self):
+        self.ent_custom_path.delete(0, END)
+        self.ent_custom_path.insert(0, program_settings["custom"])
+        self.ent_multimc_path.delete(0, END)
+        self.ent_multimc_path.insert(0,program_settings["MultiMC"])
+        self.ent_curse_path.delete(0, END)
+        self.ent_curse_path.insert(0, program_settings["curse_client"])
+        self.ent_vanilla_path.delete(0, END)
+        self.ent_vanilla_path.insert(0, program_settings["Vanilla_Client"])
+        pass
 
 
 class RootWindow(Tk):
