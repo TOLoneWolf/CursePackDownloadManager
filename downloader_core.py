@@ -182,6 +182,47 @@ def save_instance_settings(instance_dir):
     return True
 
 
+def save_mmc_cfg(instance_path):
+    print("save_mmc_cfg")
+    print(instance_path)
+    # TODO: save MMC configs.
+    """
+    ForgeVersion=12.18.3.2185
+    InstanceType=OneSix
+    IntendedVersion=1.10.2
+    MCLaunchMethod=LauncherPart
+    iconKey=default
+    name=modded 1.10.2
+    """
+    manifest_path = os.path.abspath(os.path.join(instance_path, "manifest.json"))
+    manifest_json = load_json_file(manifest_path)
+    if 'minecraft' not in manifest_json:
+        log.error('Manifest missing files key entries.')
+        return False
+    elif 'version' not in manifest_json['minecraft']:
+        return False
+    elif 'modLoaders' not in manifest_json['minecraft']:
+        return False
+    elif not manifest_json['minecraft']['modLoaders'][0]['id'].startswith('forge-'):
+        raise ValueError("Manifest forge version not detected correctly.")
+    print('ForgeVersion=' + str(manifest_json['minecraft']['modLoaders'][0]['id']))
+    print('InstanceType=OneSix')
+    print('IntendedVersion=' + str(manifest_json['minecraft']['version']))
+    print('MCLaunchMethod=LauncherPart')
+    print('iconKey=default')
+    print('name=' + str(os.path.basename(instance_path)))
+    with open(os.path.join(instance_path, 'instance.cfg'), 'w') as cfg:
+        cfg.write('ForgeVersion=' + str(manifest_json['minecraft']['modLoaders'][0]['id'][6:]) + '\n')
+        cfg.write('InstanceType=OneSix' + '\n')
+        cfg.write('IntendedVersion=' + str(manifest_json['minecraft']['version']) + '\n')
+        cfg.write('MCLaunchMethod=LauncherPart' + '\n')
+        cfg.write('iconKey=default' + '\n')
+        cfg.write('name=' + str(os.path.basename(instance_path)) + '\n')
+    print("mmc cfg saved.")
+    return True
+
+
+
 def movetree_overwrite_dst(m_src, m_dest, m_ignore=None):
     def _recursive_overwrite(src, dest, ignore):
         if os.path.isdir(src):
@@ -315,6 +356,7 @@ def instance_update_check():
                             continue
                         request_results = get_modpack_version_list(instance_settings["instance_settings"]["project_name"])
                         # results <- [pack_source, project_id, project_name, bare_pack_version_list]
+                        print("Instance Name: " + instance_settings["instance_settings"]["instance_name"])
                         log.debug(
                             "Local Version: " + str(instance_settings["instance_settings"]["version_id"]) +
                             "\nRemote Version: " + str(request_results[3][0][1]))
@@ -333,6 +375,8 @@ def instance_update_check():
                                 unpack_modpack_zip(src_zip, dst_folder_name, (dst_dir + "\\"))
                                 download_mods(os.path.join(dst_dir, dst_folder_name))
                                 instance_settings["instance_settings"]["version_id"] = request_results[3][0][1]  # update version id.
+                                if 'mmc' in instance_settings['instance_settings']['install_type']:
+                                    save_mmc_cfg(dst_dir)
                                 save_json_file(instance_settings, instance_config)
                         else:
                             print("idk how but you got a newer version then is available?")
@@ -722,7 +766,7 @@ def initialize_program_environment():
     create_dir_if_not_exist(MODPACK_ZIP_CACHE)
     create_dir_if_not_exist(MOD_CACHE)
     if os.path.exists(INSTALLED_INSTANCE_FILE):
-        installed_instances = load_json_file(INSTALLED_INSTANCE_FILE)["instances"]
+        installed_instances[:] = load_json_file(INSTALLED_INSTANCE_FILE)["instances"]
     else:
         save_json_file({"instances": installed_instances}, INSTALLED_INSTANCE_FILE)
     # TODO: Program settings file. create if non-existing.

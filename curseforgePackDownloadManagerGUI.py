@@ -10,6 +10,7 @@ import threading
 import queue
 import time
 from pathlib import Path
+from distutils.util import strtobool
 
 '''
 Author(s): TOLoneWolf
@@ -108,22 +109,46 @@ class SelectUnpackDirectory(Toplevel):
     def __init__(self, src_zip):
         self.src_zip = src_zip
         Toplevel.__init__(self)
-        self.minsize(width=600, height=200)
-        self.maxsize(width=600, height=200)
+        self.minsize(width=600, height=300)
+        self.maxsize(width=600, height=300)
         self.resizable(FALSE, FALSE)
         self.protocol("MW_DELETE_WINDOW", self.close_window)
         self.title("Select Directory")
         center_window(self)
         self.focus()
         self.grab_set()
-        for column_index in range(2+1):
-            self.columnconfigure(column_index, weight=1)
-        for row_index in range(5+1):
-            self.rowconfigure(row_index, weight=1)
-        self.rdo_selected = StringVar(value='custom')
-        self.rdo_btn_default = ttk.Radiobutton(self, text="Custom (default)", variable=self.rdo_selected, value='custom')
-        self.rdo_btn_mmc = ttk.Radiobutton(self, text="MMC Instance", variable=self.rdo_selected, value='mmc')
-        self.rdo_btn_curse = ttk.Radiobutton(self, text="Curse Instance", variable=self.rdo_selected, value='curse')
+
+        self.rdo_var_type = StringVar(value='custom')
+        self.rdo_btn_default = ttk.Radiobutton(self, text="Custom (default)", variable=self.rdo_var_type, value='custom')
+        self.rdo_btn_mmc = ttk.Radiobutton(self, text="MMC Instance", variable=self.rdo_var_type, value='mmc')
+        self.rdo_btn_curse = ttk.Radiobutton(self, text="Curse Instance", variable=self.rdo_var_type, value='curse')
+        # --- update check
+        self.con_update_check = ttk.Frame(self)
+        self.lbl_update_check = ttk.Label(self.con_update_check, text="Allow update Check: ")
+        self.rdo_var_check_update = StringVar(value='True')
+        self.rdo_btn_check_udate_true = ttk.Radiobutton(self.con_update_check, text="Enabled", variable=self.rdo_var_check_update, value="True")
+        self.rdo_btn_check_udate_false = ttk.Radiobutton(self.con_update_check, text="Disabled", variable=self.rdo_var_check_update, value="False")
+        self.lbl_update_check.grid(column=0, row=0, sticky='EW', columnspan=2)
+        self.rdo_btn_check_udate_true.grid(column=0, row=1, sticky='W')
+        self.rdo_btn_check_udate_false.grid(column=1, row=1, sticky='W')
+        for column_index in range(1+1):
+            self.con_update_check.columnconfigure(column_index, weight=1)
+        for row_index in range(1+1):
+            self.con_update_check.rowconfigure(row_index, weight=1)
+        # --- auto update
+        self.con_auto_update = ttk.Frame(self)
+        self.lbl_auto_update = ttk.Label(self.con_auto_update, text="Allow Updating: ")
+        self.rdo_var_auto_update = StringVar(value='True')
+        self.rdo_btn_auto_update_true = ttk.Radiobutton(self.con_auto_update, text="Enabled", variable=self.rdo_var_auto_update, value="True")
+        self.rdo_btn_auto_update_false = ttk.Radiobutton(self.con_auto_update, text="Disabled", variable=self.rdo_var_auto_update, value="False")
+        self.lbl_auto_update.grid(column=0, row=0, sticky='EW', columnspan=2)
+        self.rdo_btn_auto_update_true.grid(column=0, row=1, sticky='W')
+        self.rdo_btn_auto_update_false.grid(column=1, row=1, sticky='W')
+        for column_index in range(1+1):
+            self.con_auto_update.columnconfigure(column_index, weight=1)
+        for row_index in range(1+1):
+            self.con_auto_update.rowconfigure(row_index, weight=1)
+        # ---
         self.lbl_entry_name = ttk.Label(self, text="Enter Instance Name: ")
         self.entry_instance_name = ttk.Entry(self)
         self.lbl_dst_folder = ttk.Label(self, text="Select Destination Folder: ")
@@ -132,31 +157,37 @@ class SelectUnpackDirectory(Toplevel):
         self.btn_submit = ttk.Button(self, text="Unpack", command=self.process)
         self.btn_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
-        self.rdo_btn_default.grid(column=0, row = 0, sticky="NW")
+        self.rdo_btn_default.grid(column=0, row=0, sticky="NW")
         self.rdo_btn_mmc.grid(column=1, row=0, sticky='NW')
         self.rdo_btn_curse.grid(column=2, row=0, sticky='NW')
-        self.lbl_entry_name.grid(column=0, row=1, sticky='NESW', columnspan=2)
-        self.entry_instance_name.grid(column=0, row=2, sticky='EW', columnspan=1)
-        self.lbl_dst_folder.grid(column=0, row=3, sticky='NESW')
-        self.btn_dst_folder.grid(column=2, row=3, sticky='NESW')
-        self.entry_directory.grid(column=0, row=4, sticky='EW', columnspan=3)
-        self.btn_submit.grid(column=0, row=5, sticky='NESW')
-        self.btn_cancel.grid(column=2, row=5, sticky='NESW')
+        self.con_update_check.grid(column=0, row=1, sticky='W')
+        self.con_auto_update.grid(column=1, row=1, sticky='W')
+        self.lbl_entry_name.grid(column=0, row=2, sticky='NESW', columnspan=2)
+        self.entry_instance_name.grid(column=0, row=3, sticky='EW', columnspan=1)
+        self.lbl_dst_folder.grid(column=0, row=4, sticky='NESW')
+        self.btn_dst_folder.grid(column=2, row=4, sticky='NESW')
+        self.entry_directory.grid(column=0, row=5, sticky='EW', columnspan=3)
+        self.btn_submit.grid(column=0, row=6, sticky='NESW')
+        self.btn_cancel.grid(column=2, row=6, sticky='NESW')
+        for column_index in range(2+1):
+            self.columnconfigure(column_index, weight=1)
+        for row_index in range(6+1):
+            self.rowconfigure(row_index, weight=1)
 
     def close_window(self):
         self.grab_release()
         self.destroy()
 
     def browse_folder(self):
-        if self.rdo_selected.get() == "mmc":
+        if self.rdo_var_type.get() == "custom":
             path_dst_dir = filedialog.askdirectory(
                 title="Select Destination Folder",
                 initialdir=program_settings["custom"])
-        elif self.rdo_selected.get() == "mmc":
+        elif self.rdo_var_type.get() == "mmc":
             path_dst_dir = filedialog.askdirectory(
                 title="Select Destination Folder",
                 initialdir=program_settings["MultiMC"])
-        elif self.rdo_selected.get() == "curse":
+        elif self.rdo_var_type.get() == "curse":
             path_dst_dir = filedialog.askdirectory(
                 title="Select Destination Folder",
                 initialdir=program_settings["curse_client"])
@@ -170,7 +201,9 @@ class SelectUnpackDirectory(Toplevel):
         if self.entry_directory.get():
             if self.entry_instance_name.get:
                 InstanceInfo.instance_name = self.entry_instance_name.get()
-                InstanceInfo.install_type = self.rdo_selected.get()
+                InstanceInfo.install_type = self.rdo_var_type.get()
+                InstanceInfo.update_check = bool(strtobool(self.rdo_var_check_update.get()))
+                InstanceInfo.update_automatic = bool(strtobool(self.rdo_var_auto_update.get()))
                 InstanceInfo.instance_path = os.path.normpath(os.path.join(self.entry_directory.get(), self.entry_instance_name.get()))
                 log.debug("unpack process: " + str(InstanceInfo.instance_path))
                 unzip(self.src_zip, InstanceInfo.instance_path)
@@ -203,14 +236,16 @@ class SelectUnpackDirectory(Toplevel):
                             os.path.normpath(os.path.join(InstanceInfo.instance_path, PDM_INSTANCE_FOLDER, 'mods'))):
                         copytree_overwrite_dst(
                             os.path.normpath(os.path.join(InstanceInfo.instance_path, PDM_INSTANCE_FOLDER, 'mods')),
-                            os.path.normpath(os.path.join(InstanceInfo.instance_path,'minecraft', 'mods')))
+                            os.path.normpath(os.path.join(InstanceInfo.instance_path, 'minecraft', 'mods')))
 
                 if InstanceInfo.install_type == 'curse':
                     movetree_overwrite_dst(
                         os.path.join(InstanceInfo.instance_path, 'minecraft'),
                         InstanceInfo.instance_path)
+                if InstanceInfo.install_type == 'mmc':
+                    if not save_mmc_cfg(InstanceInfo.instance_path):
+                        raise IOError("save_mmc_cfg failed.")
                 save_instance_settings(InstanceInfo.instance_path)
-
                 if not {"location": InstanceInfo.instance_path} in installed_instances:
                     installed_instances.append({"location": InstanceInfo.instance_path})
                     save_json_file({"instances": installed_instances}, INSTALLED_INSTANCE_FILE)
