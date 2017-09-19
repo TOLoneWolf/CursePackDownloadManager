@@ -59,13 +59,15 @@ DEFAULT_PROGRAM_SETTINGS = {
 # program_settings should get new values on load if user changed them.
 program_settings = {}
 program_settings.update(DEFAULT_PROGRAM_SETTINGS)
+installed_instances = []
 
 CACHE_PATH = "curse_download_cache"  # FIXME:
 MODPACK_ZIP_CACHE = os.path.join(CACHE_PATH, "modpacks_cache")
 MOD_CACHE = os.path.join(CACHE_PATH, "mods_cache")
-CONFIG_FILE = "pdm_settings.json"
+PDM_SETTINGS_FILE = "pdm_settings.json"
 INSTALLED_INSTANCE_FILE = "pdm_installed_instances.json"  # FIXME:
-installed_instances = []
+PDM_INSTANCE_FOLDER = 'pdm_instance'
+PDM_INSTANCE_FILE = 'pdm_instance.json'
 
 
 req_sess = requests.session()
@@ -73,8 +75,6 @@ req_sess.headers.update({
     'User-Agent': requests.utils.default_user_agent() +
     ' ' + PROGRAM_NAME + '/' + PROGRAM_VERSION_NUMBER + '-' + PROGRAM_VERSION_BUILD})
 
-PDM_INSTANCE_FOLDER = 'pdm_instance'
-PDM_INSTANCE_FILE = 'pdm_instance.json'
 
 # --- Parse in arguments.
 parser = argparse.ArgumentParser(description="Download Curse modpack mods")
@@ -224,7 +224,7 @@ def save_mmc_cfg(instance_path):
 
 
 def save_program_settings():
-    save_json_file(program_settings, CONFIG_FILE)
+    save_json_file(program_settings, PDM_SETTINGS_FILE)
     pass
 
 
@@ -283,11 +283,11 @@ def create_dir_if_not_exist(path):
 
 def init_pdm_settings():
     # TODO: Finish default configs, and loading them.
-    if not os.path.exists(CONFIG_FILE):
-        save_json_file(program_settings, CONFIG_FILE)
+    if not os.path.exists(PDM_SETTINGS_FILE):
+        save_json_file(program_settings, PDM_SETTINGS_FILE)
         log.debug("Default Program Config Created.")
-    if os.path.exists(CONFIG_FILE):
-        program_settings.update(load_json_file(CONFIG_FILE))
+    if os.path.exists(PDM_SETTINGS_FILE):
+        program_settings.update(load_json_file(PDM_SETTINGS_FILE))
 
 
 def get_human_readable(size, precision=2, requestz=-1):
@@ -352,6 +352,7 @@ def instance_update_check():
             pack_instance_list[:] = [instance_config for instance_config in pack_instance_list if
                                      os.path.exists(os.path.join(instance_config["location"], PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE))]
             if pack_instance_list:
+                save_json_file({"instances": pack_instance_list}, INSTALLED_INSTANCE_FILE)  # FIXME: Do this in a better way to inform the user and give them a chance to fix the path?
                 for instance_config in pack_instance_list:
                     instance_config = os.path.join(instance_config["location"], PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE)
                     if os.path.exists(instance_config):  # If config file exist.
