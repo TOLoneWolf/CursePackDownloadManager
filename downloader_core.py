@@ -346,6 +346,11 @@ class InstanceInfo:
 
 
 def instance_update_check():
+    # FIXME: redo this to use internal copy instead of loading file every time.
+    # TODO: Change to 2 functions, on that supplies list to check to the seond that does the check of each instances passed.
+    # TODO: Some kind of project specific update check cache,
+    #   to prevent checking same project multiple times within short time frame.
+    # Store as dictionary key of project ID, storing version information and pass that on to the update check.
     if os.path.exists(INSTALLED_INSTANCE_FILE):
         pack_instance_list = load_json_file(INSTALLED_INSTANCE_FILE)["instances"]
         log.debug(str(INSTALLED_INSTANCE_FILE))
@@ -378,7 +383,7 @@ def instance_update_check():
                                                                           request_results[2],
                                                                           request_results[3][0][1])
 
-                                # TODO: copy old manifest to safety for use in update comparision.
+                                # TODO: copy old manifest to safety for use in update comparision of mods???.
                                 unpack_modpack_zip(src_zip, dst_folder_name, (dst_dir + "\\"))
                                 download_mods(os.path.join(dst_dir, dst_folder_name))
                                 instance_settings["instance_settings"]["version_id"] = request_results[3][0][1]  # update version id.

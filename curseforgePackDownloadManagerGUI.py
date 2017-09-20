@@ -52,8 +52,8 @@ class NewFromCurseUrl(Toplevel):
                                                   "Example: https://minecraft.curseforge.com/projects/MOD_PACK_NAME")
         self.entry_mod_pack_name = ttk.Entry(self)
         self.lbl_feedback_info = ttk.Label(self, text="")
-        # FIXME Remove this debug line below.
-        self.entry_mod_pack_name.insert(END, "triarcraft")
+        # FIXME Remove this debug line below. 'self.entry_mod_pack_name.insert(END, "triarcraft")'
+        self.entry_mod_pack_name.insert(END, "ftb beyond")
         self.button_submit = ttk.Button(self, text="Enter", command=self.fetch_pack_from_url)
         self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
@@ -497,6 +497,7 @@ class EditInstance(Toplevel):
         self.focus()
         self.grab_set()
 
+        self.local_display_list = []
         # --- Container
         self.con_listbox = ttk.Frame(self)
         self.listbox_instances = Listbox(self.con_listbox, height=12)
@@ -511,23 +512,25 @@ class EditInstance(Toplevel):
             self.con_listbox.columnconfigure(column_index, weight=1)
         for row_index in range(0 + 1):
             self.con_listbox.rowconfigure(row_index, weight=1)
-        # ---
+        # --- Container Grid Layout
+        self.btn_add_existing = ttk.Button(self, text="Add Existing Instance To PDM", command=self.add_existing)
         self.btn_manually_update = ttk.Button(self, text="Manually Update", command=self.manually_update)
         self.btn_update_instance = ttk.Button(self, text="Update Instance", command=self.update_instance)
         self.btn_check_instance_update = ttk.Button(self, text="Check Instance for update", command=self.check_instance_update)
         self.btn_delete = ttk.Button(self, text="Delete Instance", command=self.delete)
         self.btn_close = ttk.Button(self, text="Close", command=self.close_window)
         # --- Grid Layout
-        self.con_listbox.grid(column=0, row=0, sticky='NESW', columnspan=2, rowspan=5)
-        self.btn_manually_update.grid(column=2, row=0, sticky='NESW')
-        self.btn_update_instance.grid(column=2, row=1, sticky='NESW')
-        self.btn_check_instance_update.grid(column=2, row=2, sticky='NESW')
-        self.btn_delete.grid(column=2, row=3, sticky='NESW')
-        self.btn_close.grid(column=2, row=4, sticky='NESW')
+        self.con_listbox.grid(column=0, row=0, sticky='NESW', columnspan=2, rowspan=6)
+        self.btn_add_existing.grid(column=2, row=0, sticky='NESW')
+        self.btn_manually_update.grid(column=2, row=1, sticky='NESW')
+        self.btn_update_instance.grid(column=2, row=2, sticky='NESW')
+        self.btn_check_instance_update.grid(column=2, row=3, sticky='NESW')
+        self.btn_delete.grid(column=2, row=4, sticky='NESW')
+        self.btn_close.grid(column=2, row=5, sticky='NESW')
 
         for column_index in range(2 + 1):
             self.columnconfigure(column_index, weight=1)
-        for row_index in range(4 + 1):
+        for row_index in range(5 + 1):
             self.rowconfigure(row_index, weight=1)
         self.list_update()
         self.listbox_instances.selection_set(0)
@@ -539,12 +542,16 @@ class EditInstance(Toplevel):
         self.destroy()
 
     def list_update(self):
+        self.local_display_list[:] = []  # Reset to blank.
         log.debug("list_update")
         self.listbox_instances.delete(0, END)
         for instance in installed_instances:
-            load_instance_settings(instance['location'])
-            log.debug(InstanceInfo.instance_name + " - " + InstanceInfo.instance_path)
-            self.listbox_instances.insert(END, InstanceInfo.instance_name + " - " + InstanceInfo.instance_path)
+            if os.path.exists(instance['location']):
+                load_instance_settings(instance['location'])
+                self.local_display_list.append(instance)
+                log.debug(InstanceInfo.instance_name + " - " + InstanceInfo.instance_path)
+                self.listbox_instances.insert(END, InstanceInfo.instance_name + " - " + InstanceInfo.instance_path)
+        installed_instances[:] = self.local_display_list  # FIXME: Do better cleanup of bad paths.
         pass
 
     def instance_selected(self, *_):
@@ -554,25 +561,63 @@ class EditInstance(Toplevel):
             log.debug(installed_instances[self.listbox_instances.curselection()[0]])
         pass
 
+    def add_existing(self):
+        log.debug("add_existing")
+        # TODO: Add path if existing minecraft directory.
+        # initialdir=program_settings["custom"]
+        path_dst_dir = filedialog.askdirectory(
+            title="Select Minecraft Instance Folder")
+        if path_dst_dir:
+            if os.path.exists(path_dst_dir):
+                if os.path.exists(os.path.join(path_dst_dir, 'manifest.json')):
+                    if os.path.exists(os.path.join(path_dst_dir, 'minecraft')):
+                        log.debug("default or MultiMC")
+                        pass
+                    elif os.path.exists(os.path.join(path_dst_dir, 'mods')):
+                        log.debug("curse/twitch client")
+                        pass
+                    # Ask for modpack name. search for it.
+                    # Ask what install type it is.
+                    # Ask file id (aka version) from list fetched from the web.
+                    # Ask if update check, auto update.
+                else:
+                    log.debug("manifest.json is missing from directory, invalid instance.")
+            else:
+                raise IOError("I Got An Invalid Directory Path! HELP!")
+
     def manually_update(self):
         log.debug("manually_update")
         # TODO: Basically copy create new instance setup.
-        pass
+        if self.listbox_instances.curselection():
+            log.debug(installed_instances[self.listbox_instances.curselection()[0]])
+            pass
 
     def update_instance(self):
         log.debug("update_instance")
         # TODO: updates instance if one is newer and ignores auto update setting off.
-        pass
+        if self.listbox_instances.curselection():
+            log.debug(installed_instances[self.listbox_instances.curselection()[0]])
+            pass
 
     def check_instance_update(self):
         log.debug("check_instance_update")
         # TODO: Just checks if there is an update for this instance.
-        pass
+        if self.listbox_instances.curselection():
+            log.debug(installed_instances[self.listbox_instances.curselection()[0]])
+            pass
 
     def delete(self):
         log.debug("delete")
         # TODO: Remove instance completely.
-        pass
+        if self.listbox_instances.curselection():
+            log.debug(installed_instances[self.listbox_instances.curselection()[0]])
+            if os.path.exists(installed_instances[self.listbox_instances.curselection()[0]]['location']):
+                shutil.rmtree(installed_instances[self.listbox_instances.curselection()[0]]['location'])
+                del installed_instances[self.listbox_instances.curselection()[0]]
+                print(installed_instances)
+                self.list_update()
+                save_json_file({"instances": installed_instances}, INSTALLED_INSTANCE_FILE)
+            pass
 
 
 class ProgramSettings(Toplevel):
@@ -721,7 +766,6 @@ if __name__ == '__main__':
     # needs to be inside a Tk() master window to display the askstring.
     # ask = simpledialog.askstring("test", "yo")
     initialize_program_environment()
-    # FIXME: Temp line to test. Remove this later.
     print("Cached files are stored here:\n %s\n" % os.path.abspath(CACHE_PATH))
     RootWindow()
-    InstanceInfo.master_thread_running = False
+    InstanceInfo.master_thread_running = False  # FIXME: used to tell download thread to close. Redo the whole threading thing.
