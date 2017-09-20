@@ -130,6 +130,8 @@ def load_instance_settings(instance_dir):
             os.path.join(instance_dir, PDM_INSTANCE_FOLDER, PDM_INSTANCE_FILE))['instance_settings']
         # print(instance_config)
         if instance_config:
+            InstanceInfo.instance_path = instance_dir
+            # ---
             InstanceInfo.source = instance_config['url_source']
             InstanceInfo.project_id = instance_config['project_id']
             InstanceInfo.project_name = instance_config['project_name']

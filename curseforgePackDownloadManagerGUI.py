@@ -282,6 +282,8 @@ class VersionSelectionMenu(Toplevel):
             # --- container object.
             self.listbox_version_container = ttk.Frame(self)
             self.listbox_version = Listbox(self.listbox_version_container, height=12)
+            # dotbox, none, or underline
+            self.listbox_version.config(activestyle="none")
             # FIXME: Remove the following line and self.update_selected method. No longer needed?
             # self.listbox_version.bind('<<ListboxSelect>>', self.update_selected)
             self.scroll_listbox_version = ttk.Scrollbar(self.listbox_version_container, command=self.listbox_version.yview)
@@ -355,6 +357,7 @@ class VersionSelectionMenu(Toplevel):
             self.listbox_version.insert(END, listElement)
         self.listbox_version.selection_set(0)
         self.listbox_version.activate(0)
+        self.listbox_version.see(0)
         if not self.current_version_list:
             self.button_submit['state'] = DISABLED  # Something failed better not allow them to continue.
         else:
@@ -482,8 +485,94 @@ class NewInstanceWindow(Toplevel):
         CopyInstance()
 
 
-class EditInstance:
-    pass  # TODO add editing instances options.
+class EditInstance(Toplevel):
+    def __init__(self):
+        Toplevel.__init__(self)
+        self.minsize(width=700, height=300)
+        self.maxsize(width=700, height=300)
+        self.resizable(FALSE, FALSE)
+        self.protocol("WM_DELETE_WINDOW", self.close_window)
+        self.title("Edit Instance")
+        center_window(self)
+        self.focus()
+        self.grab_set()
+
+        # --- Container
+        self.con_listbox = ttk.Frame(self)
+        self.listbox_instances = Listbox(self.con_listbox, height=12)
+        self.listbox_instances.config(activestyle="none")
+        self.scroll_listbox_instances = ttk.Scrollbar(self.con_listbox, command=self.listbox_instances.yview)
+        self.listbox_instances.grid(column=0, row=0, sticky='NESW')
+        self.scroll_listbox_instances.grid(column=1, row=0, sticky='NS')
+        self.listbox_instances['yscrollcommand'] = self.scroll_listbox_instances.set
+        self.listbox_instances.focus()
+        self.listbox_instances.bind('<<ListboxSelect>>', self.instance_selected)
+        for column_index in range(0 + 1):
+            self.con_listbox.columnconfigure(column_index, weight=1)
+        for row_index in range(0 + 1):
+            self.con_listbox.rowconfigure(row_index, weight=1)
+        # ---
+        self.btn_manually_update = ttk.Button(self, text="Manually Update", command=self.manually_update)
+        self.btn_update_instance = ttk.Button(self, text="Update Instance", command=self.update_instance)
+        self.btn_check_instance_update = ttk.Button(self, text="Check Instance for update", command=self.check_instance_update)
+        self.btn_delete = ttk.Button(self, text="Delete Instance", command=self.delete)
+        self.btn_close = ttk.Button(self, text="Close", command=self.close_window)
+        # --- Grid Layout
+        self.con_listbox.grid(column=0, row=0, sticky='NESW', columnspan=2, rowspan=5)
+        self.btn_manually_update.grid(column=2, row=0, sticky='NESW')
+        self.btn_update_instance.grid(column=2, row=1, sticky='NESW')
+        self.btn_check_instance_update.grid(column=2, row=2, sticky='NESW')
+        self.btn_delete.grid(column=2, row=3, sticky='NESW')
+        self.btn_close.grid(column=2, row=4, sticky='NESW')
+
+        for column_index in range(2 + 1):
+            self.columnconfigure(column_index, weight=1)
+        for row_index in range(4 + 1):
+            self.rowconfigure(row_index, weight=1)
+        self.list_update()
+        self.listbox_instances.selection_set(0)
+        self.listbox_instances.activate(0)
+        self.listbox_instances.see(0)
+
+    def close_window(self):
+        self.grab_release()
+        self.destroy()
+
+    def list_update(self):
+        log.debug("list_update")
+        self.listbox_instances.delete(0, END)
+        for instance in installed_instances:
+            load_instance_settings(instance['location'])
+            log.debug(InstanceInfo.instance_name + " - " + InstanceInfo.instance_path)
+            self.listbox_instances.insert(END, InstanceInfo.instance_name + " - " + InstanceInfo.instance_path)
+        pass
+
+    def instance_selected(self, *_):
+        log.debug("instance_selected")
+        if self.listbox_instances.curselection():
+            log.debug(self.listbox_instances.curselection()[0])
+            log.debug(installed_instances[self.listbox_instances.curselection()[0]])
+        pass
+
+    def manually_update(self):
+        log.debug("manually_update")
+        # TODO: Basically copy create new instance setup.
+        pass
+
+    def update_instance(self):
+        log.debug("update_instance")
+        # TODO: updates instance if one is newer and ignores auto update setting off.
+        pass
+
+    def check_instance_update(self):
+        log.debug("check_instance_update")
+        # TODO: Just checks if there is an update for this instance.
+        pass
+
+    def delete(self):
+        log.debug("delete")
+        # TODO: Remove instance completely.
+        pass
 
 
 class ProgramSettings(Toplevel):
@@ -564,7 +653,6 @@ class ProgramSettings(Toplevel):
         self.apply()
         save_program_settings()
         pass
-
 
 
 class RootWindow(Tk):
