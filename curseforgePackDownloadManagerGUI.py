@@ -517,20 +517,22 @@ class EditInstance(Toplevel):
         self.btn_manually_update = ttk.Button(self, text="Manually Update", command=self.manually_update)
         self.btn_update_instance = ttk.Button(self, text="Update Instance", command=self.update_instance)
         self.btn_check_instance_update = ttk.Button(self, text="Check Instance for update", command=self.check_instance_update)
+        self.btn_remove_refernce = ttk.Button(self, text="Remove From PDM", command=self.remove_from_manager)
         self.btn_delete = ttk.Button(self, text="Delete Instance", command=self.delete)
         self.btn_close = ttk.Button(self, text="Close", command=self.close_window)
         # --- Grid Layout
-        self.con_listbox.grid(column=0, row=0, sticky='NESW', columnspan=2, rowspan=6)
+        self.con_listbox.grid(column=0, row=0, sticky='NESW', columnspan=2, rowspan=7)
         self.btn_add_existing.grid(column=2, row=0, sticky='NESW')
         self.btn_manually_update.grid(column=2, row=1, sticky='NESW')
         self.btn_update_instance.grid(column=2, row=2, sticky='NESW')
         self.btn_check_instance_update.grid(column=2, row=3, sticky='NESW')
-        self.btn_delete.grid(column=2, row=4, sticky='NESW')
-        self.btn_close.grid(column=2, row=5, sticky='NESW')
+        self.btn_remove_refernce.grid(column=2, row=4, sticky='NESW')
+        self.btn_delete.grid(column=2, row=5, sticky='NESW')
+        self.btn_close.grid(column=2, row=6, sticky='NESW')
 
         for column_index in range(2 + 1):
             self.columnconfigure(column_index, weight=1)
-        for row_index in range(5 + 1):
+        for row_index in range(6 + 1):
             self.rowconfigure(row_index, weight=1)
         self.list_update()
         self.listbox_instances.selection_set(0)
@@ -606,6 +608,16 @@ class EditInstance(Toplevel):
             log.debug(installed_instances[self.listbox_instances.curselection()[0]])
             pass
 
+    def remove_from_manager(self):
+        log.debug("remove_from_manager")
+        # TODO: Remove instance from manager.
+        if self.listbox_instances.curselection():
+            log.debug(installed_instances[self.listbox_instances.curselection()[0]])
+            del installed_instances[self.listbox_instances.curselection()[0]]
+            print(installed_instances)
+            self.list_update()
+            save_json_file({"instances": installed_instances}, INSTALLED_INSTANCE_FILE)
+
     def delete(self):
         log.debug("delete")
         # TODO: Remove instance completely.
@@ -617,7 +629,6 @@ class EditInstance(Toplevel):
                 print(installed_instances)
                 self.list_update()
                 save_json_file({"instances": installed_instances}, INSTALLED_INSTANCE_FILE)
-            pass
 
 
 class ProgramSettings(Toplevel):
