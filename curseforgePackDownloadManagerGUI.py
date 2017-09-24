@@ -453,6 +453,10 @@ class NewInstanceWindow(Toplevel):
         button_new_from_manifest = ttk.Button(self, text="New From Curse Manifest.json", command=self.pack_from_manifest)
         button_new_from_existing_instance = ttk.Button(self, text="Copy Existing Instance", command=self.copy_instance)
         button_close_window = ttk.Button(self, text="Close", command=self.close_window)
+        # FIXME: When implemented correctly remove the following disabled states.
+        button_new_from_zip.config(state='disabled')
+        button_new_from_manifest.config(state='disabled')
+        button_new_from_existing_instance.config(state='disabled')
         # ---
         button_new_from_url.grid(column=0, row=0, sticky='NESW')
         button_new_from_zip.grid(column=0, row=1, sticky='NESW')
@@ -523,6 +527,11 @@ class EditInstance(Toplevel):
         self.btn_remove_refernce = ttk.Button(self, text="Remove From PDM", command=self.remove_from_manager)
         self.btn_delete = ttk.Button(self, text="Delete Instance", command=self.delete)
         self.btn_close = ttk.Button(self, text="Close", command=self.close_window)
+        # FIXME: Remove these disable lines when functions actually do something.
+        self.btn_add_existing.config(state='disabled')
+        self.btn_manually_update.config(state='disabled')
+        self.btn_update_instance.config(state='disabled')
+        self.btn_check_instance_update.config(state='disabled')
         # --- Grid Layout
         self.con_listbox.grid(column=0, row=0, sticky='NESW', columnspan=2, rowspan=7)
         self.btn_add_existing.grid(column=2, row=0, sticky='NESW')
@@ -651,13 +660,15 @@ class ProgramSettings(Toplevel):
         self.curse_client_instance_path = ''
         self.vanilla_instance_path = ''
 
-        self.lbl_custom_path = ttk.Label(self, text="Custom: ")
+        self.lbl_custom_path = ttk.Label(self, text="Custom Instance Directory Path: ("
+                                                    "Ex: C:\..\my games\minecraft\instances)")
         self.ent_custom_path = ttk.Entry(self)
-        self.lbl_multimc_path = ttk.Label(self, text="MultiMC: ")
+        self.lbl_multimc_path = ttk.Label(self, text="MultiMC Instance Directory Path: ("
+                                                     "Ex: C:\..\..\MultiMC 5\instances)")
         self.ent_multimc_path = ttk.Entry(self)
-        self.lbl_curse_path = ttk.Label(self, text="Curse(Twitch) Client: ")
+        self.lbl_curse_path = ttk.Label(self, text="Curse(Twitch) Client Instance Directory Path: ")
         self.ent_curse_path = ttk.Entry(self)
-        self.lbl_vanilla_path = ttk.Label(self, text="Vanilla: ")
+        self.lbl_vanilla_path = ttk.Label(self, text="Vanilla Instance Directory Path: ")
         self.ent_vanilla_path = ttk.Entry(self)
 
         self.btn_save = ttk.Button(self, text="Save", command=self.save)
@@ -733,6 +744,7 @@ class RootWindow(Tk):
         self.bProgramSettings = ttk.Button(self.menu_buttons, text="Program Settings", command=ProgramSettings)
         self.selfUpdateCheck = ttk.Button(self.menu_buttons, text="Self Update",
                                           command=lambda: self.set_output("No Updates :P"))
+        self.selfUpdateCheck.config(state='disabled') # FIXME: Remove when implemented self update.
         self.closeProgram = ttk.Button(self.menu_buttons, text="Exit Program", command=self.close_window)
         # ---
         self.logWindow.grid(column=0, row=0, sticky='NESW')

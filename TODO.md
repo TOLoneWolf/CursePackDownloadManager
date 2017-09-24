@@ -17,6 +17,7 @@
 - [ ] Do something cool.
 - [ ] mmc instance.cfg - ask what icon to use. or import from curse.
 - [ ] mmc instance grouping - ask user what group to add to.
+- [ ] mmc icon "..\MultiMC 5\icons" add icon for pack to here and set it to instance.
 - [ ] Backup saves.
 - [ ] Search mods to add to instance from curse.
 - [ ] index local mods in cache for adding to pack.
