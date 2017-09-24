@@ -1,4 +1,5 @@
 import argparse
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -185,19 +186,31 @@ def save_instance_settings(instance_dir):
     return True
 
 
-def save_mmc_cfg(instance_path):
-    print("save_mmc_cfg")
-    print(instance_path)
-    # TODO: save MMC configs.
-    """
-    ForgeVersion=12.18.3.2185
-    InstanceType=OneSix
-    IntendedVersion=1.10.2
-    MCLaunchMethod=LauncherPart
-    iconKey=default
-    name=modded 1.10.2
-    """
-    manifest_path = os.path.abspath(os.path.join(instance_path, "manifest.json"))
+def mmc_read_cfg(file_path):
+    cfg_dictionary = {}
+    if os.path.exists(os.path.join(file_path, 'instance.cfg')):
+        with open(os.path.join(file_path, 'instance.cfg')) as file_handler:
+            if file_handler:
+                for file_line in file_handler:
+                    file_line = file_line.strip()
+                    if file_line is "":
+                        continue
+                    elif file_line.startswith('#'):
+                        continue
+                    else:
+                        key, value = file_line.split('=')
+                        if value.isdigit():
+                            value = int(value)
+                        # elif value == 'true':
+                        #     value = True
+                        # elif value == 'false':
+                        #     value = False
+                        cfg_dictionary[key] = value
+    return cfg_dictionary
+
+
+def mmc_write_cfg(cfg_dictionary, file_path):
+    manifest_path = os.path.abspath(os.path.join(file_path, "manifest.json"))
     manifest_json = load_json_file(manifest_path)
     if 'minecraft' not in manifest_json:
         log.error('Manifest missing files key entries.')
@@ -208,21 +221,34 @@ def save_mmc_cfg(instance_path):
         return False
     elif not manifest_json['minecraft']['modLoaders'][0]['id'].startswith('forge-'):
         raise ValueError("Manifest forge version not detected correctly.")
-    print('ForgeVersion=' + str(manifest_json['minecraft']['modLoaders'][0]['id']))
-    print('InstanceType=OneSix')
-    print('IntendedVersion=' + str(manifest_json['minecraft']['version']))
-    print('MCLaunchMethod=LauncherPart')
-    print('iconKey=default')
-    print('name=' + str(os.path.basename(instance_path)))
-    with open(os.path.join(instance_path, 'instance.cfg'), 'w') as cfg:
-        cfg.write('ForgeVersion=' + str(manifest_json['minecraft']['modLoaders'][0]['id'][6:]) + '\n')
-        cfg.write('InstanceType=OneSix' + '\n')
-        cfg.write('IntendedVersion=' + str(manifest_json['minecraft']['version']) + '\n')
-        cfg.write('MCLaunchMethod=LauncherPart' + '\n')
-        cfg.write('iconKey=default' + '\n')
-        cfg.write('name=' + str(os.path.basename(instance_path)) + '\n')
-    print("mmc cfg saved.")
-    return True
+    # print('ForgeVersion=' + str(manifest_json['minecraft']['modLoaders'][0]['id']))
+    # print('InstanceType=OneSix')
+    # print('IntendedVersion=' + str(manifest_json['minecraft']['version']))
+    # print('MCLaunchMethod=LauncherPart')
+    # print('iconKey=default')
+    # print('name=' + str(os.path.basename(file_path)))
+
+    if type(cfg_dictionary) is dict:
+        if cfg_dictionary:
+            cfg_dictionary.update({
+                'ForgeVersion': str(manifest_json['minecraft']['modLoaders'][0]['id'][6:]),
+                'IntendedVersion': str(manifest_json['minecraft']['version']),
+            })
+        else:
+            cfg_dictionary.update({
+                'ForgeVersion': str(manifest_json['minecraft']['modLoaders'][0]['id'][6:]),
+                'InstanceType': 'OneSix',
+                'IntendedVersion': str(manifest_json['minecraft']['version']),
+                'MCLaunchMethod': 'LauncherPart',
+                'iconKey': 'flame',  # default, flame
+                'name': str(os.path.basename(file_path))
+            })
+        if os.access(os.path.dirname(os.path.abspath(os.path.join(file_path, 'instance.cfg'))), os.W_OK):
+            with open(os.path.join(file_path, 'instance.cfg'), 'w') as file_handler:
+                for key, value in cfg_dictionary.items():
+                    file_handler.write(str(key + '=' + str(value) + '\n'))
+                return True
+    return False
 
 
 def save_program_settings():
@@ -388,7 +414,11 @@ def instance_update_check():
                                 download_mods(os.path.join(dst_dir, dst_folder_name))
                                 instance_settings["instance_settings"]["version_id"] = request_results[3][0][1]  # update version id.
                                 if 'mmc' in instance_settings['instance_settings']['install_type']:
-                                    save_mmc_cfg(dst_dir)
+                                    mmc_file_contents = mmc_read_cfg(dst_dir)
+                                    if mmc_write_cfg(mmc_file_contents, dst_dir):
+                                        print("MultiMC settings Saved.")
+                                    else:
+                                        raise RuntimeError("MultiMC settings file save failed to execute correctly.")
                                 save_json_file(instance_settings, instance_config)
                         else:
                             print("idk how but you got a newer version then is available?")
@@ -484,9 +514,14 @@ def get_modpack_version_list(project_identifier):
         build_version_element = []
         bare_pack_version_list = []  # bare_pack_version_list[<VersionType>, <FileID>, <VersionTitle>]
         mod_pack_url_true = False
+        current_page_count = 1
         for line in content_list:
-            line = line.strip()
+            line = line.strip().replace("&#x27;", "'")
             if mod_pack_url_true:  # Have we seen if it's modpack, before we look for versions in the next lines?
+                for test_number in re.findall('(?<=page=)\w+', line):
+                    test_number = int(test_number)
+                    if current_page_count < test_number:
+                        current_page_count = test_number
                 if line == "":  # Skip empty lines sooner.
                     pass
                 elif line == '<tr class="project-file-list-item">':
@@ -502,6 +537,37 @@ def get_modpack_version_list(project_identifier):
             else:
                 if line == '<a href="/modpacks">Modpacks</a>':
                     mod_pack_url_true = True
+        if current_page_count > 1:
+            log.debug("Page count: " + str(current_page_count))
+            for page in range(2, current_page_count+1):
+                if pack_source == 'curseforge':
+                    sess_response = req_sess.get(
+                        "https://minecraft.curseforge.com/projects/" + project_identifier + "/files/?page=" + str(current_page_count))
+                elif pack_source == 'ftb':
+                    sess_response = req_sess.get(
+                        "https://www.feed-the-beast.com/projects/" + project_identifier + "/files/?page=" + str(current_page_count))
+                log.debug("URL: " + sess_response.url)
+                if sess_response.status_code == 200:
+                    project_name = sess_response.url.split("/")[-2:-1][0]  # strip down to project name.
+                    content_list = str(sess_response.content)
+                    content_list = content_list.split("\\r\\n")
+                    combine_lines = False
+                    for line in content_list:
+                        line = line.strip().replace("&#x27;", "'")
+                        if line == "":  # Skip empty lines sooner.
+                            pass
+                        elif line == '<tr class="project-file-list-item">':
+                            combine_lines = True
+                        elif line == "</tr>":
+                            if combine_lines:
+                                content_version_list.append(build_version_element)
+                                build_version_element = []
+                                combine_lines = False
+                        if not line == "":
+                            if combine_lines:
+                                build_version_element.append(line)
+                else:
+                    raise ConnectionError("URL request failed sub page request: " + sess_response.url)
 
         if mod_pack_url_true:
             # print(len('<a class="overflow-tip twitch-link" href="/projects//files/'))  # len: 59

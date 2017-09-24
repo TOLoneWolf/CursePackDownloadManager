@@ -53,7 +53,9 @@ class NewFromCurseUrl(Toplevel):
         self.entry_mod_pack_name = ttk.Entry(self)
         self.lbl_feedback_info = ttk.Label(self, text="")
         # FIXME Remove this debug line below. 'self.entry_mod_pack_name.insert(END, "triarcraft")'
-        self.entry_mod_pack_name.insert(END, "ftb beyond")
+        # self.entry_mod_pack_name.insert(END, "project ozone 2 reloaded")
+        # self.entry_mod_pack_name.insert(END, "btf beyond")
+        self.entry_mod_pack_name.insert(END, "wyldbits")
         self.button_submit = ttk.Button(self, text="Enter", command=self.fetch_pack_from_url)
         self.button_cancel = ttk.Button(self, text="Cancel", command=self.close_window)
         # ---
@@ -243,8 +245,9 @@ class SelectUnpackDirectory(Toplevel):
                         os.path.join(InstanceInfo.instance_path, 'minecraft'),
                         InstanceInfo.instance_path)
                 if InstanceInfo.install_type == 'mmc':
-                    if not save_mmc_cfg(InstanceInfo.instance_path):
-                        raise IOError("save_mmc_cfg failed.")
+                    mmc_cfg_contents = mmc_read_cfg(InstanceInfo.instance_path)
+                    if not mmc_write_cfg(mmc_cfg_contents, InstanceInfo.instance_path):
+                        raise RuntimeError("MultiMC settings file save failed to execute correctly.")
                 save_instance_settings(InstanceInfo.instance_path)
                 if not {"location": InstanceInfo.instance_path} in installed_instances:
                     installed_instances.append({"location": InstanceInfo.instance_path})

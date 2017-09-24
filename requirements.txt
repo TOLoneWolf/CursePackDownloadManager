@@ -1,4 +1,5 @@
-requests
-## older requirements may not apply to new downloader.
-# appdirs==1.4.0
+# 'pip install -r requirements.txt' from this directory to install required modules.
+# If package 'idna' is not added in cx_freeze.py requests==2.11.1 must be used in order for freeze to work.
+# https://github.com/anthony-tuininga/cx_Freeze/issues/228
 # requests==2.11.1
+requests
