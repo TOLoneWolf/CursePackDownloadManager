@@ -223,8 +223,6 @@ class SelectUnpackDirectory(Toplevel):
                     if InstanceInfo.file_size:
                         percent = round((int(InstanceInfo.current_file_size) / int(InstanceInfo.file_size)) * 100, 0)
                         print(str(percent) + " P: " + str(get_human_readable(InstanceInfo.current_file_size)) + "/" + str(get_human_readable(InstanceInfo.file_size)))
-                    else:
-                        pass
 
                 # Copy user saved settings and mods back into the instance.
                 if InstanceInfo.merge_custom:
@@ -245,9 +243,20 @@ class SelectUnpackDirectory(Toplevel):
                         os.path.join(InstanceInfo.instance_path, 'minecraft'),
                         InstanceInfo.instance_path)
                 if InstanceInfo.install_type == 'mmc':
+                    if not os.path.exists(
+                            os.path.join(os.path.split(
+                                program_settings['MultiMC'])[0], 'icons',
+                                         InstanceInfo.project_name + 'icon.png')):
+                        shutil.copy(
+                            os.path.join(MODPACK_ZIP_CACHE, InstanceInfo.project_id, 'pack_icon.png'),
+                            os.path.join(os.path.split(
+                                program_settings['MultiMC'])[0], 'icons',
+                                InstanceInfo.project_name + '_icon.png'))
+
                     mmc_cfg_contents = mmc_read_cfg(InstanceInfo.instance_path)
                     if not mmc_write_cfg(mmc_cfg_contents, InstanceInfo.instance_path):
                         raise RuntimeError("MultiMC settings file save failed to execute correctly.")
+
                 save_instance_settings(InstanceInfo.instance_path)
                 if not {"location": InstanceInfo.instance_path} in installed_instances:
                     installed_instances.append({"location": InstanceInfo.instance_path})
@@ -566,14 +575,12 @@ class EditInstance(Toplevel):
                 log.debug(InstanceInfo.instance_name + " - " + InstanceInfo.instance_path)
                 self.listbox_instances.insert(END, InstanceInfo.instance_name + " - " + InstanceInfo.instance_path)
         installed_instances[:] = self.local_display_list  # FIXME: Do better cleanup of bad paths.
-        pass
 
     def instance_selected(self, *_):
         log.debug("instance_selected")
         if self.listbox_instances.curselection():
             log.debug(self.listbox_instances.curselection()[0])
             log.debug(installed_instances[self.listbox_instances.curselection()[0]])
-        pass
 
     def add_existing(self):
         log.debug("add_existing")
@@ -586,10 +593,8 @@ class EditInstance(Toplevel):
                 if os.path.exists(os.path.join(path_dst_dir, 'manifest.json')):
                     if os.path.exists(os.path.join(path_dst_dir, 'minecraft')):
                         log.debug("default or MultiMC")
-                        pass
                     elif os.path.exists(os.path.join(path_dst_dir, 'mods')):
                         log.debug("curse/twitch client")
-                        pass
                     # Ask for modpack name. search for it.
                     # Ask what install type it is.
                     # Ask file id (aka version) from list fetched from the web.
@@ -604,21 +609,18 @@ class EditInstance(Toplevel):
         # TODO: Basically copy create new instance setup.
         if self.listbox_instances.curselection():
             log.debug(installed_instances[self.listbox_instances.curselection()[0]])
-            pass
 
     def update_instance(self):
         log.debug("update_instance")
         # TODO: updates instance if one is newer and ignores auto update setting off.
         if self.listbox_instances.curselection():
             log.debug(installed_instances[self.listbox_instances.curselection()[0]])
-            pass
 
     def check_instance_update(self):
         log.debug("check_instance_update")
         # TODO: Just checks if there is an update for this instance.
         if self.listbox_instances.curselection():
             log.debug(installed_instances[self.listbox_instances.curselection()[0]])
-            pass
 
     def remove_from_manager(self):
         log.debug("remove_from_manager")
@@ -636,7 +638,7 @@ class EditInstance(Toplevel):
         if self.listbox_instances.curselection():
             log.debug(installed_instances[self.listbox_instances.curselection()[0]])
             if os.path.exists(installed_instances[self.listbox_instances.curselection()[0]]['location']):
-                shutil.rmtree(installed_instances[self.listbox_instances.curselection()[0]]['location'])
+                shutil.rmtree(installed_instances[self.listbox_instances.curselection()[0]]['location'], onerror=shutil_rmtree_on_rm_error)
                 del installed_instances[self.listbox_instances.curselection()[0]]
                 print(installed_instances)
                 self.list_update()
@@ -710,19 +712,16 @@ class ProgramSettings(Toplevel):
         self.ent_curse_path.insert(0, program_settings["curse_client"])
         self.ent_vanilla_path.delete(0, END)
         self.ent_vanilla_path.insert(0, program_settings["Vanilla_Client"])
-        pass
 
     def apply(self):
         program_settings['custom'] = os.path.normpath(self.ent_custom_path.get())
         program_settings['MultiMC'] = os.path.normpath(self.ent_multimc_path.get())
         program_settings['curse_client'] = os.path.normpath(self.ent_curse_path.get())
         program_settings["Vanilla_Client"] = os.path.normpath(self.ent_vanilla_path.get())
-        pass
 
     def save(self):
         self.apply()
         save_program_settings()
-        pass
 
 
 class RootWindow(Tk):

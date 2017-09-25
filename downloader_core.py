@@ -13,6 +13,7 @@ import sys
 import json
 import logging
 import time
+import stat
 
 '''
 Author(s): TOLoneWolf
@@ -43,7 +44,7 @@ class KEY:
     cache_path = "cache_path"
 
 
-# Defaults settings in case we want to reset to them later.
+# Defaults settings in case we want to reset_dl to them later.
 DEFAULT_PROGRAM_SETTINGS = {
     "self_update_check": True,
     "on_start_check_instance_updates": True,
@@ -240,7 +241,8 @@ def mmc_write_cfg(cfg_dictionary, file_path):
                 'InstanceType': 'OneSix',
                 'IntendedVersion': str(manifest_json['minecraft']['version']),
                 'MCLaunchMethod': 'LauncherPart',
-                'iconKey': 'flame',  # default, flame
+                # 'iconKey': 'flame',  # default, flame
+                'iconKey': InstanceInfo.project_name + '_icon',
                 'name': str(os.path.basename(file_path))
             })
         if os.access(os.path.dirname(os.path.abspath(os.path.join(file_path, 'instance.cfg'))), os.W_OK):
@@ -299,6 +301,30 @@ def copytree_overwrite_dst(m_src, m_dest, m_ignore=None):
     _recursive_overwrite(m_src, m_dest, m_ignore)
 
 
+def shutil_rmtree_on_rm_error(func, path, exc_info):
+    """
+    shutil.rmtree(installed_instances[<directory>, onerror=shutil_rmtree_on_rm_error)
+
+    :param func:
+    :param path: path to file/dir that failed to delete.
+    :param exc_info:
+
+    Now, to be fair, the error function could be called for a variety of reasons.
+    The 'func' parameter can tell you what function "failed"(os.rmdir() or os.remove()).
+    What you do here depends on how bullet proof you want your rmtree to be.
+    If it's really just a case of needing to mark files as writable, you could do what I did above.
+    If you want to be more careful (i.e. determining if the directory coudln't be removed,
+        or if there was a sharing violation on the file while trying to delete it),
+        the appropriate logic would have to be inserted into the shutil_rmtree_on_rm_error() function.
+    """
+    # https://stackoverflow.com/questions/4829043/how-to-remove-read-only-attrib-directory-with-python-in-windows#4829285
+    # Sigh.. why can't removing things be nicer...
+    # path contains the path of the file that couldn't be removed
+    # let's just assume that it's read-only and unlink it.
+    os.chmod(path, stat.S_IWRITE)
+    os.unlink(path)
+
+
 def create_dir_if_not_exist(path):
     log.debug("create_dir_if_not_exist: " + str(path))
     if not os.path.exists(path):
@@ -351,6 +377,7 @@ class InstanceInfo:
     merge_custom = True
 
     instance_path = ''
+    pack_icon_url = ''
     update_version_id = 0
     list_version_id = []
 
@@ -362,7 +389,7 @@ class InstanceInfo:
     current_progress = 0
     return_arg = ''
 
-    def reset(self):
+    def reset_dl(self):
         self.is_done = False
         self.file_size = 0
         self.current_file_size = 0
@@ -370,6 +397,16 @@ class InstanceInfo:
         self.current_progress = 0
         self.return_arg = ''
 
+    def clear_instance(self):
+        self.source = ''
+        self.project_id = 0
+        self.project_name = ''
+        self.version_id = 0
+        self.instance_name = ''
+        self.instance_path = ''
+        self.pack_icon_url = ''
+        self.list_version_id[:] = []
+        self.reset_dl()
 
 def instance_update_check():
     # FIXME: redo this to use internal copy instead of loading file every time.
@@ -515,8 +552,13 @@ def get_modpack_version_list(project_identifier):
         bare_pack_version_list = []  # bare_pack_version_list[<VersionType>, <FileID>, <VersionTitle>]
         mod_pack_url_true = False
         current_page_count = 1
+        InstanceInfo.pack_icon_url = ''
         for line in content_list:
             line = line.strip().replace("&#x27;", "'")
+            if not InstanceInfo.pack_icon_url:
+                if line.startswith('<a class="e-avatar64 lightbox" href="') and line.endswith('.png">'):
+                    InstanceInfo.pack_icon_url = line[37:-2]
+                    continue
             if mod_pack_url_true:  # Have we seen if it's modpack, before we look for versions in the next lines?
                 for test_number in re.findall('(?<=page=)\w+', line):
                     test_number = int(test_number)
@@ -548,7 +590,6 @@ def get_modpack_version_list(project_identifier):
                         "https://www.feed-the-beast.com/projects/" + project_identifier + "/files/?page=" + str(current_page_count))
                 log.debug("URL: " + sess_response.url)
                 if sess_response.status_code == 200:
-                    project_name = sess_response.url.split("/")[-2:-1][0]  # strip down to project name.
                     content_list = str(sess_response.content)
                     content_list = content_list.split("\\r\\n")
                     combine_lines = False
@@ -572,6 +613,8 @@ def get_modpack_version_list(project_identifier):
         if mod_pack_url_true:
             # print(len('<a class="overflow-tip twitch-link" href="/projects//files/'))  # len: 59
             fileid_start_pos = len(project_name) + 59
+            log.debug("Project Name: " + str(project_name))
+            log.debug("Start Pos: " + str(fileid_start_pos))
             project_id = content_version_list[0][9][9:15]
             for listElement in content_version_list:
                 if listElement[2] == '<div class="release-phase tip" title="Release"></div>':
@@ -584,6 +627,7 @@ def get_modpack_version_list(project_identifier):
                     bare_pack_version_list.append(
                         [3, listElement[7][fileid_start_pos:-1], listElement[9][28:-4].split(">", 1)[1]])
 
+            print(bare_pack_version_list)
             return [pack_source, project_id, project_name, bare_pack_version_list]
     return ['', 0, '', []]
 
@@ -598,7 +642,7 @@ def download_modpack_zip(pack_source, project_id, project_name, file_id):
     :param file_id: The id for the specific version requested. '2287097'
     :return: MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
     """
-    InstanceInfo().reset()
+    InstanceInfo().reset_dl()
     log.info("download_modpack_zip\n" + "project_name: " + project_name + " file_id: " + file_id)
     #  Check cache for file first.
     dep_cache_dir = Path(MODPACK_ZIP_CACHE + "/" + str(project_id) + "/" + str(file_id))
@@ -609,6 +653,18 @@ def download_modpack_zip(pack_source, project_id, project_name, file_id):
             log.debug(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
             InstanceInfo.is_done = True
             InstanceInfo.return_arg = MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name
+
+            if not os.path.exists(os.path.join(MODPACK_ZIP_CACHE, project_id, 'pack_icon.png')):
+                InstanceInfo.current_file_size = 0
+                request_file_response = req_sess.get(InstanceInfo.pack_icon_url, stream=True)
+                with open(os.path.join(CACHE_PATH, 'pack_icon.png'), 'wb') as fh:
+                    for chunk in request_file_response.iter_content(1024):
+                        InstanceInfo.current_file_size += len(chunk)
+                        fh.write(chunk)
+                shutil.move(
+                    os.path.join(CACHE_PATH, 'pack_icon.png'),
+                    os.path.join(MODPACK_ZIP_CACHE, project_id, 'pack_icon.png'))
+
             return InstanceInfo.return_arg
 
     if pack_source == "curseforge":
@@ -645,6 +701,17 @@ def download_modpack_zip(pack_source, project_id, project_name, file_id):
         create_dir_if_not_exist(MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id)
         shutil.move(modpack_part_path,
                     MODPACK_ZIP_CACHE + "/" + project_id + "/" + file_id + "/" + file_name)
+
+        if not os.path.exists(os.path.join(MODPACK_ZIP_CACHE, project_id, 'pack_icon.png')):
+            InstanceInfo.current_file_size = 0
+            request_file_response = req_sess.get(InstanceInfo.pack_icon_url, stream=True)
+            with open(os.path.join(CACHE_PATH, 'pack_icon.png'), 'wb') as fh:
+                for chunk in request_file_response.iter_content(1024):
+                    InstanceInfo.current_file_size += len(chunk)
+                    fh.write(chunk)
+            shutil.move(
+                os.path.join(CACHE_PATH, 'pack_icon.png'),
+                os.path.join(MODPACK_ZIP_CACHE, project_id, 'pack_icon.png'))
     else:
         InstanceInfo.is_done = True
         InstanceInfo.return_arg = ''
@@ -667,7 +734,7 @@ def download_mods(instance_dir):
     :param instance_dir: The minecraft directory that contains the curse manifest.json file.
     :return: True on success, False on failure.
     """
-    InstanceInfo().reset()
+    InstanceInfo().reset_dl()
     manifest_path = os.path.abspath(os.path.join(instance_dir, "manifest.json"))
     log.debug(str(manifest_path))
     manifest_json = load_json_file(manifest_path)
