@@ -188,7 +188,7 @@ class SelectUnpackDirectory(Toplevel):
         elif self.rdo_var_type.get() == "mmc":
             path_dst_dir = filedialog.askdirectory(
                 title="Select Destination Folder",
-                initialdir=program_settings["MultiMC"])
+                initialdir=os.path.join(program_settings["MultiMC"], 'instances'))
         elif self.rdo_var_type.get() == "curse":
             path_dst_dir = filedialog.askdirectory(
                 title="Select Destination Folder",
@@ -244,13 +244,13 @@ class SelectUnpackDirectory(Toplevel):
                         InstanceInfo.instance_path)
                 if InstanceInfo.install_type == 'mmc':
                     if not os.path.exists(
-                            os.path.join(os.path.split(
-                                program_settings['MultiMC'])[0], 'icons',
-                                         InstanceInfo.project_name + 'icon.png')):
+                            os.path.join(
+                                program_settings['MultiMC'], 'icons',
+                                InstanceInfo.project_name + 'icon.png')):
                         shutil.copy(
                             os.path.join(MODPACK_ZIP_CACHE, InstanceInfo.project_id, 'pack_icon.png'),
-                            os.path.join(os.path.split(
-                                program_settings['MultiMC'])[0], 'icons',
+                            os.path.join(
+                                program_settings['MultiMC'], 'icons',
                                 InstanceInfo.project_name + '_icon.png'))
 
                     mmc_cfg_contents = mmc_read_cfg(InstanceInfo.instance_path)
@@ -665,8 +665,8 @@ class ProgramSettings(Toplevel):
         self.lbl_custom_path = ttk.Label(self, text="Custom Instance Directory Path: ("
                                                     "Ex: C:\..\my games\minecraft\instances)")
         self.ent_custom_path = ttk.Entry(self)
-        self.lbl_multimc_path = ttk.Label(self, text="MultiMC Instance Directory Path: ("
-                                                     "Ex: C:\..\..\MultiMC 5\instances)")
+        self.lbl_multimc_path = ttk.Label(self, text="MultiMC Directory Path: ("
+                                                     "Ex: C:\..\..\MultiMC 5)")
         self.ent_multimc_path = ttk.Entry(self)
         self.lbl_curse_path = ttk.Label(self, text="Curse(Twitch) Client Instance Directory Path: ")
         self.ent_curse_path = ttk.Entry(self)
