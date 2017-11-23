@@ -523,7 +523,7 @@ def get_modpack_version_list(project_identifier):
     :ex: https://www.feed-the-beast.com/projects/ftb-beyond/files
     """
     if type(project_identifier) is str:
-        project_identifier = project_identifier.strip().replace(" ", "-").lower()
+        project_identifier = project_identifier.strip().replace(" ", "-").replace(".", "-").lower()
         if project_identifier == "":
             return ['', 0, '', []]
     else:

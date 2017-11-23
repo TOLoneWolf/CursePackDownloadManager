@@ -15,7 +15,7 @@ from distutils.util import strtobool
 '''
 Author(s): TOLoneWolf
 
-This contains the code used to make the GUI interface.
+This contains the code used to make the graphical user interface.
 '''
 
 
